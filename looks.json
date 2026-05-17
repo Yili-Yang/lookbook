@@ -1,0 +1,210 @@
+{
+  "looks": [
+    {
+      "id": "L01",
+      "title": "Cream tee & stone pleated trousers",
+      "vibe": "Smart casual · neutral",
+      "tags": ["smart-casual"],
+      "bg": "#efebe2",
+      "why": "Box-fit tee + high-rise pleated wide trouser is the Dessaint silhouette. One color family, clean lines.",
+      "pieces": [
+        {
+          "name": "Oversized heavyweight tee — White/Cream",
+          "brand": "COS",
+          "price": "$49",
+          "details": "290gsm organic cotton, mock neck, dropped shoulders",
+          "color": "#ece3d2",
+          "image": "images/cos_tee_white.jpg",
+          "shape": "tee",
+          "links": [
+            { "label": "Shop white", "url": "https://www.cos.com/en-us/men/menswear/tshirts/oversized-fit/product/the-heavy-duty-t-shirt-white-1147848001" },
+            { "label": "All oversized tees", "url": "https://www.cos.com/en-us/men/t-shirts/oversized-t-shirts" }
+          ]
+        },
+        {
+          "name": "Pleated wide pants — Beige",
+          "brand": "Uniqlo",
+          "price": "$49.90",
+          "details": "Stretch twill, elastic waist, color code 32 BEIGE",
+          "color": "#bdb29a",
+          "image": "images/uniqlo_pleated_beige.jpg",
+          "shape": "trouser",
+          "links": [
+            { "label": "Shop on Uniqlo", "url": "https://www.uniqlo.com/us/en/products/E462197-000/00" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "L02",
+      "title": "Black tee & olive wide pants",
+      "vibe": "Relaxed · monochrome",
+      "tags": ["relaxed"],
+      "bg": "#f1ede3",
+      "why": "High contrast dark-on-light. Black tee anchors the top half; olive wide pants keep it grounded and relaxed.",
+      "pieces": [
+        {
+          "name": "Oversized heavyweight tee — Black",
+          "brand": "COS",
+          "price": "$49",
+          "details": "290gsm organic cotton, mock neck, dropped shoulders",
+          "color": "#1a1a1a",
+          "image": "images/cos_tee_black.jpg",
+          "shape": "tee",
+          "links": [
+            { "label": "All oversized tees", "url": "https://www.cos.com/en-us/men/t-shirts/oversized-t-shirts" }
+          ]
+        },
+        {
+          "name": "Pleated wide pants — Olive",
+          "brand": "Uniqlo",
+          "price": "$49.90",
+          "details": "Color code 57 OLIVE",
+          "color": "#a89a78",
+          "image": "images/uniqlo_pleated_olive.jpg",
+          "shape": "trouser",
+          "links": [
+            { "label": "Shop on Uniqlo", "url": "https://www.uniqlo.com/us/en/products/E462197-000/00" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "L03",
+      "title": "Linen shirt & pleated shorts",
+      "vibe": "Relaxed · vacation",
+      "tags": ["relaxed"],
+      "bg": "#f4ede0",
+      "why": "Linen on linen, all in warm sand tones. The unbuttoned drape and pleat detail keep it from looking like beachwear.",
+      "pieces": [
+        {
+          "name": "Premium linen shirt — Beige",
+          "brand": "Uniqlo",
+          "price": "$59.90",
+          "details": "100% European linen, color code 32 BEIGE",
+          "color": "#e8dcc0",
+          "image": "images/uniqlo_linen_shirt_beige.jpg",
+          "shape": "shirt",
+          "links": [
+            { "label": "Shop beige", "url": "https://www.uniqlo.com/us/en/products/E455957-000/00?colorDisplayCode=32" },
+            { "label": "All linen tops", "url": "https://www.uniqlo.com/us/en/men/linen/tops" }
+          ]
+        },
+        {
+          "name": "Pleated chino shorts — Beige",
+          "brand": "Uniqlo",
+          "price": "$39.90",
+          "details": "Pleated front, mid-thigh length",
+          "color": "#ddcfb0",
+          "image": "images/uniqlo_pleated_shorts_beige.jpg",
+          "shape": "short",
+          "links": [
+            { "label": "Men's shorts", "url": "https://www.uniqlo.com/us/en/men/bottoms/shorts" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "L04",
+      "title": "Off-white overshirt over tee",
+      "vibe": "Smart casual · layered",
+      "tags": ["smart-casual", "elevated"],
+      "bg": "#ecebe6",
+      "why": "The overshirt-as-light-jacket trick. Off-white open over a tee balances the darker trouser; great for cooler summer evenings.",
+      "pieces": [
+        {
+          "name": "Cotton linen shirt — Off white",
+          "brand": "Uniqlo",
+          "price": "$39.90",
+          "details": "Linen blend, two-way collar, relaxed fit",
+          "color": "#e8e4d8",
+          "image": "images/uniqlo_overshirt_offwhite.jpg",
+          "shape": "overshirt",
+          "links": [
+            { "label": "Shop on Uniqlo", "url": "https://www.uniqlo.com/us/en/products/E477181-000/00" }
+          ]
+        },
+        {
+          "name": "Pleated wide pants — Gray",
+          "brand": "Uniqlo",
+          "price": "$49.90",
+          "details": "Color code 06 GRAY",
+          "color": "#5c5c58",
+          "image": "images/uniqlo_pleated_gray.jpg",
+          "shape": "trouser",
+          "links": [
+            { "label": "Shop on Uniqlo", "url": "https://www.uniqlo.com/us/en/products/E462197-000/00" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "L05",
+      "title": "Navy polo & cream trousers",
+      "vibe": "Elevated · summer evening",
+      "tags": ["elevated", "smart-casual"],
+      "bg": "#f0ece2",
+      "why": "A knit polo elevates above a tee without going formal. Navy + cream is the safest, sharpest summer evening pairing there is.",
+      "pieces": [
+        {
+          "name": "Soft polo — Navy",
+          "brand": "Uniqlo",
+          "price": "$29.90",
+          "details": "Knit polo, regular fit, short sleeve",
+          "color": "#1f2d44",
+          "image": "images/uniqlo_polo_navy.jpg",
+          "shape": "polo",
+          "links": [
+            { "label": "All polos", "url": "https://www.uniqlo.com/us/en/men/shirts-and-polos/polo-shirts" }
+          ]
+        },
+        {
+          "name": "Pleated wide pants — Beige",
+          "brand": "Uniqlo",
+          "price": "$49.90",
+          "details": "Color code 32 BEIGE",
+          "color": "#e8dec0",
+          "image": "images/uniqlo_pleated_beige.jpg",
+          "shape": "trouser",
+          "links": [
+            { "label": "Shop on Uniqlo", "url": "https://www.uniqlo.com/us/en/products/E462197-000/00" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "L06",
+      "title": "Charcoal tee & pleated shorts",
+      "vibe": "Relaxed · hot day",
+      "tags": ["relaxed"],
+      "bg": "#ede9e0",
+      "why": "When it's 90°F and you still want to look pulled together. Dark tee adds gravity; pleated shorts keep you from looking like you're going to the beach.",
+      "pieces": [
+        {
+          "name": "Heavyweight tee — Charcoal",
+          "brand": "COS",
+          "price": "$49",
+          "details": "290gsm organic cotton, mock neck",
+          "color": "#3d3d3d",
+          "image": "images/cos_tee_charcoal.jpg",
+          "shape": "tee",
+          "links": [
+            { "label": "All oversized tees", "url": "https://www.cos.com/en-us/men/t-shirts/oversized-t-shirts" }
+          ]
+        },
+        {
+          "name": "Pleated chino shorts — Beige",
+          "brand": "Uniqlo",
+          "price": "$39.90",
+          "details": "Pleated front, mid-thigh length",
+          "color": "#cabea0",
+          "image": "images/uniqlo_pleated_shorts_beige.jpg",
+          "shape": "short",
+          "links": [
+            { "label": "Men's shorts", "url": "https://www.uniqlo.com/us/en/men/bottoms/shorts" }
+          ]
+        }
+      ]
+    }
+  ]
+}
