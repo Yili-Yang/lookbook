@@ -5,11 +5,13 @@ function loadLooks() {
   try {
     const raw = localStorage.getItem(LOOKS_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch (e) { console.error('[store] loadLooks parse error:', e); return []; }
 }
 
 function saveLooks(looks) {
-  localStorage.setItem(LOOKS_KEY, JSON.stringify(looks));
+  try {
+    localStorage.setItem(LOOKS_KEY, JSON.stringify(looks));
+  } catch { /* quota exceeded or private browsing — data not persisted */ }
 }
 
 function loadPrefs() {
@@ -17,5 +19,7 @@ function loadPrefs() {
 }
 
 function savePrefs(text) {
-  localStorage.setItem(PREFS_KEY, text);
+  try {
+    localStorage.setItem(PREFS_KEY, text);
+  } catch { /* quota exceeded or private browsing — data not persisted */ }
 }
