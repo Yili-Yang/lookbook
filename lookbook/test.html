@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Tests</title></head>
+<body>
+<pre id="out"></pre>
+<script src="store.js"></script>
+<script>
+  const out = document.getElementById('out');
+  let passed = 0, failed = 0;
+
+  function assert(label, got, expected) {
+    const ok = JSON.stringify(got) === JSON.stringify(expected);
+    out.textContent += (ok ? '✓' : '✗') + ' ' + label + (ok ? '' : '\n  got: ' + JSON.stringify(got) + '\n  exp: ' + JSON.stringify(expected)) + '\n';
+    ok ? passed++ : failed++;
+  }
+
+  localStorage.clear();
+
+  // loadLooks returns [] when empty
+  assert('loadLooks empty', loadLooks(), []);
+
+  // saveLooks + loadLooks round-trips
+  const look = { id: '1', title: 'Test', starred: false, notes: '', pieces: [], createdAt: 1 };
+  saveLooks([look]);
+  assert('saveLooks+loadLooks', loadLooks(), [look]);
+
+  // loadPrefs returns '' when empty
+  localStorage.clear();
+  assert('loadPrefs empty', loadPrefs(), '');
+
+  // savePrefs + loadPrefs round-trips
+  savePrefs('navy and cream only');
+  assert('savePrefs+loadPrefs', loadPrefs(), 'navy and cream only');
+
+  out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
+  localStorage.clear();
+</script>
+</body>
+</html>
