@@ -4,6 +4,7 @@
 <body>
 <pre id="out"></pre>
 <script src="store.js"></script>
+<script src="fetch.js"></script>
 <script>
   const out = document.getElementById('out');
   let passed = 0, failed = 0;
@@ -31,6 +32,35 @@
   // savePrefs + loadPrefs round-trips
   savePrefs('navy and cream only');
   assert('savePrefs+loadPrefs', loadPrefs(), 'navy and cream only');
+
+  // parseProductPage: extracts og:image
+  const html1 = `<html><head>
+    <meta property="og:image" content="https://cdn.example.com/product.jpg">
+    <meta property="og:title" content="Relaxed Linen Shirt - COS">
+    <meta property="og:site_name" content="COS">
+    <meta property="product:price:amount" content="79">
+    <meta property="product:price:currency" content="USD">
+  </head></html>`;
+  const r1 = parseProductPage(html1, 'https://www.cos.com/en-us/product/123');
+  assert('og:image', r1.imageUrl, 'https://cdn.example.com/product.jpg');
+  assert('og:title trimmed', r1.name, 'Relaxed Linen Shirt');
+  assert('og:site_name brand', r1.brand, 'COS');
+  assert('product:price:amount USD', r1.price, '$79');
+
+  // parseProductPage: twitter:image fallback
+  const html2 = `<html><head>
+    <meta name="twitter:image" content="https://cdn.example.com/tw.jpg">
+    <title>Navy Chinos | Uniqlo</title>
+  </head></html>`;
+  const r2 = parseProductPage(html2, 'https://www.uniqlo.com/us/product/456');
+  assert('twitter:image fallback', r2.imageUrl, 'https://cdn.example.com/tw.jpg');
+  assert('title parsed brand separator', r2.name, 'Navy Chinos');
+  assert('domain brand fallback', r2.brand, 'Uniqlo');
+
+  // parseProductPage: price regex fallback
+  const html3 = `<html><body>Price: $49.90</body></html>`;
+  const r3 = parseProductPage(html3, 'https://store.example.com/item');
+  assert('price regex fallback', r3.price, '$49.90');
 
   out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
   localStorage.clear();
