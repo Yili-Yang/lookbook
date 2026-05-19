@@ -75,3 +75,167 @@ function renderLook(look) {
     </article>
   `;
 }
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+let pieceSlotCount = 0;
+
+function openModal() {
+  pieceSlotCount = 0;
+  document.getElementById('look-title').value = '';
+  document.getElementById('look-notes').value = '';
+  document.getElementById('pieces-container').innerHTML = '';
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  addPieceSlot();
+  addPieceSlot();
+  document.getElementById('look-title').focus();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+function addPieceSlot() {
+  if (pieceSlotCount >= 3) return;
+  pieceSlotCount++;
+  const idx = pieceSlotCount;
+  const slot = document.createElement('div');
+  slot.className = 'piece-slot';
+  slot.dataset.slotIndex = idx;
+  slot.innerHTML = `
+    <div class="piece-slot-header">
+      <span class="piece-slot-label">Piece ${idx}</span>
+      ${idx > 1 ? `<button class="btn-icon" onclick="removePieceSlot(this)" aria-label="Remove piece">✕</button>` : ''}
+    </div>
+    <div class="slot-url-row">
+      <input type="url" placeholder="Paste product page URL" autocomplete="off">
+      <button class="btn-ghost btn-sm" onclick="triggerFetch(this.closest('.piece-slot'))">Fetch</button>
+    </div>
+    <div class="slot-status" style="display:none"></div>
+    <div class="slot-preview" style="display:none">
+      <img class="slot-img" src="" alt="">
+      <div class="slot-fields">
+        <input type="text" placeholder="Name" data-field="name">
+        <input type="text" placeholder="Brand" data-field="brand">
+        <input type="text" placeholder="Price (e.g. $79)" data-field="price">
+      </div>
+    </div>
+    <div class="slot-fallback" style="display:none">
+      <div class="slot-fallback-label">Couldn't fetch image — paste image URL directly:</div>
+      <input type="url" placeholder="https://cdn.example.com/image.jpg"
+             oninput="onFallbackImageInput(this)">
+    </div>
+  `;
+  const urlInput = slot.querySelector('.slot-url-row input');
+  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') triggerFetch(slot); });
+  slot.querySelectorAll('.slot-fields input, .slot-fallback input').forEach(inp => {
+    inp.addEventListener('input', updateSaveButton);
+  });
+  document.getElementById('pieces-container').appendChild(slot);
+  if (pieceSlotCount >= 3) document.getElementById('btn-add-piece').style.display = 'none';
+  updateSaveButton();
+}
+
+function removePieceSlot(btn) {
+  btn.closest('.piece-slot').remove();
+  pieceSlotCount--;
+  document.getElementById('btn-add-piece').style.display = '';
+  updateSaveButton();
+}
+
+async function triggerFetch(slot) {
+  const urlInput = slot.querySelector('.slot-url-row input');
+  const url = urlInput.value.trim();
+  if (!url) return;
+
+  const statusEl = slot.querySelector('.slot-status');
+  const previewEl = slot.querySelector('.slot-preview');
+  const fallbackEl = slot.querySelector('.slot-fallback');
+  const fetchBtn = slot.querySelector('.slot-url-row button');
+
+  statusEl.className = 'slot-status';
+  statusEl.innerHTML = `<span class="spinner"></span> Fetching…`;
+  statusEl.style.display = 'flex';
+  previewEl.style.display = 'none';
+  fallbackEl.style.display = 'none';
+  urlInput.disabled = true;
+  fetchBtn.disabled = true;
+
+  try {
+    const data = await fetchProductData(url);
+
+    slot.querySelector('img.slot-img').src = data.imageUrl;
+    slot.querySelector('[data-field="name"]').value = data.name;
+    slot.querySelector('[data-field="brand"]').value = data.brand;
+    slot.querySelector('[data-field="price"]').value = data.price;
+
+    if (data.imageUrl) {
+      statusEl.style.display = 'none';
+      previewEl.style.display = 'flex';
+    } else {
+      statusEl.className = 'slot-status error';
+      statusEl.textContent = "Couldn't find image — paste it below.";
+      fallbackEl.style.display = 'block';
+    }
+  } catch (err) {
+    statusEl.className = 'slot-status error';
+    statusEl.textContent = "Couldn't fetch — paste image URL directly.";
+    statusEl.style.display = 'flex';
+    fallbackEl.style.display = 'block';
+  } finally {
+    urlInput.disabled = false;
+    fetchBtn.disabled = false;
+    updateSaveButton();
+  }
+}
+
+function onFallbackImageInput(input) {
+  const slot = input.closest('.piece-slot');
+  const imgEl = slot.querySelector('img.slot-img');
+  const previewEl = slot.querySelector('.slot-preview');
+  imgEl.src = input.value.trim();
+  previewEl.style.display = input.value.trim() ? 'flex' : 'none';
+  updateSaveButton();
+}
+
+function updateSaveButton() {
+  const title = document.getElementById('look-title').value.trim();
+  const slots = [...document.querySelectorAll('.piece-slot')];
+  const hasOnePiece = slots.some(slot => {
+    const img = slot.querySelector('img.slot-img');
+    return img && img.src && img.src !== window.location.href;
+  });
+  document.getElementById('btn-save').disabled = !(title && hasOnePiece);
+}
+
+function saveNewLook() {
+  const title = document.getElementById('look-title').value.trim();
+  const notes = document.getElementById('look-notes').value.trim();
+  const slots = [...document.querySelectorAll('.piece-slot')];
+
+  const pieces = slots.map(slot => {
+    const img = slot.querySelector('img.slot-img');
+    const imageUrl = (img?.src && img.src !== window.location.href) ? img.src : '';
+    const urlInput = slot.querySelector('.slot-url-row input');
+    const productUrl = urlInput?.value.trim() || '';
+    // Reject javascript: protocol URLs
+    const safeProductUrl = /^https?:\/\//i.test(productUrl) ? productUrl : '';
+    const fallbackImageUrl = slot.querySelector('.slot-fallback input')?.value.trim() || '';
+    return {
+      id: uuid(),
+      productUrl: safeProductUrl,
+      imageUrl: imageUrl || fallbackImageUrl,
+      name: slot.querySelector('[data-field="name"]')?.value.trim() || 'Untitled piece',
+      brand: slot.querySelector('[data-field="brand"]')?.value.trim() || '',
+      price: slot.querySelector('[data-field="price"]')?.value.trim() || '',
+    };
+  }).filter(p => p.imageUrl);
+
+  if (!title || pieces.length === 0) return;
+
+  const look = { id: uuid(), title, starred: false, notes, pieces, createdAt: Date.now() };
+  looks.unshift(look);
+  saveLooks(looks);
+  closeModal();
+  renderGrid();
+}
