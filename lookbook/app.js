@@ -253,3 +253,46 @@ function closeDrawer() {
   document.getElementById('prefs-drawer').classList.add('hidden');
   document.getElementById('drawer-backdrop').classList.add('hidden');
 }
+
+// ── Card interactions ──────────────────────────────────────────────────────
+function toggleStar(id) {
+  looks = looks.map(l => l.id === id ? { ...l, starred: !l.starred } : l);
+  saveLooks(looks);
+  renderGrid();
+}
+
+function deleteLook(id) {
+  if (!confirm('Delete this look?')) return;
+  looks = looks.filter(l => l.id !== id);
+  saveLooks(looks);
+  renderGrid();
+}
+
+function startTitleEdit(id, el) {
+  const input = document.createElement('input');
+  input.className = 'look-title-input';
+  input.value = el.textContent;
+  input.onblur = () => saveTitleEdit(id, input);
+  input.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { el.style.display = ''; input.remove(); }
+  };
+  el.style.display = 'none';
+  el.parentNode.insertBefore(input, el);
+  input.focus();
+  input.select();
+}
+
+function saveTitleEdit(id, input) {
+  const title = input.value.trim();
+  if (title) {
+    looks = looks.map(l => l.id === id ? { ...l, title } : l);
+    saveLooks(looks);
+  }
+  renderGrid();
+}
+
+function saveNotes(id, value) {
+  looks = looks.map(l => l.id === id ? { ...l, notes: value } : l);
+  saveLooks(looks);
+}
