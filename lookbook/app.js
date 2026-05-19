@@ -296,3 +296,47 @@ function saveNotes(id, value) {
   looks = looks.map(l => l.id === id ? { ...l, notes: value } : l);
   saveLooks(looks);
 }
+
+// ── Init ───────────────────────────────────────────────────────────────────
+function init() {
+  looks = loadLooks();
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderGrid();
+    });
+  });
+
+  // Add Look button + modal controls
+  document.getElementById('btn-add').addEventListener('click', openModal);
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('btn-cancel').addEventListener('click', closeModal);
+  document.getElementById('btn-save').addEventListener('click', saveNewLook);
+  document.getElementById('btn-add-piece').addEventListener('click', addPieceSlot);
+  document.getElementById('look-title').addEventListener('input', updateSaveButton);
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  });
+
+  // Preferences drawer
+  document.getElementById('btn-prefs').addEventListener('click', openDrawer);
+  document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+  document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
+  document.getElementById('prefs-text').addEventListener('input', e => savePrefs(e.target.value));
+
+  // Close modal/drawer on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
+      if (!document.getElementById('prefs-drawer').classList.contains('hidden')) closeDrawer();
+    }
+  });
+
+  renderGrid();
+}
+
+init();
