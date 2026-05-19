@@ -240,3 +240,16 @@ function saveNewLook() {
   closeModal();
   renderGrid();
 }
+
+// ── Preferences drawer ─────────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById('prefs-text').value = loadPrefs();
+  document.getElementById('prefs-drawer').classList.remove('hidden');
+  document.getElementById('drawer-backdrop').classList.remove('hidden');
+  document.getElementById('prefs-text').focus();
+}
+
+function closeDrawer() {
+  document.getElementById('prefs-drawer').classList.add('hidden');
+  document.getElementById('drawer-backdrop').classList.add('hidden');
+}
