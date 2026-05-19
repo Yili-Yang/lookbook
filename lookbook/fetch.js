@@ -35,7 +35,7 @@ function parseProductPage(html, productUrl) {
   })();
 
   const rawTitle = getMeta('meta[property="og:title"]', 'meta[name="twitter:title"]') || doc.title || '';
-  const name = rawTitle.replace(/\s*[-–|·]\s*.+$/, '').trim();
+  const name = rawTitle.replace(/\s*[-–—|·]\s*.+$/, '').trim();
 
   const priceAmount = getMeta('meta[property="product:price:amount"]', 'meta[property="og:price:amount"]');
   const priceCurrency = getMeta('meta[property="product:price:currency"]', 'meta[property="og:price:currency"]');
@@ -44,7 +44,7 @@ function parseProductPage(html, productUrl) {
     const symbol = (!priceCurrency || priceCurrency === 'USD') ? '$' : priceCurrency + ' ';
     price = symbol + priceAmount;
   } else {
-    price = html.match(/\$[\d,]+(?:\.\d{2})?/)?.[0] || '';
+    price = html.match(/\$\d{1,3}(?:,\d{3})*(?:\.\d{2})?/)?.[0] || '';
   }
 
   const siteName = getMeta('meta[property="og:site_name"]');
