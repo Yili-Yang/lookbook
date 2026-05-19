@@ -30,7 +30,7 @@ function renderGrid() {
 }
 
 function renderLook(look) {
-  const photoCount = look.pieces.length;
+  const photoCount = look.pieces?.length || 0;
   const photosHtml = look.pieces.map(p => `
     <div class="photo-cell">
       <img src="${esc(p.imageUrl)}" alt="${esc(p.name)}"
