@@ -200,7 +200,7 @@ function onFallbackImageInput(input) {
 
 function updateSaveButton() {
   const title = document.getElementById('look-title').value.trim();
-  const slots = [...document.querySelectorAll('.piece-slot')];
+  const slots = [...document.getElementById('pieces-container').querySelectorAll('.piece-slot')];
   const hasOnePiece = slots.some(slot => {
     const img = slot.querySelector('img.slot-img');
     return img && img.src && img.src !== window.location.href;
@@ -211,7 +211,7 @@ function updateSaveButton() {
 function saveNewLook() {
   const title = document.getElementById('look-title').value.trim();
   const notes = document.getElementById('look-notes').value.trim();
-  const slots = [...document.querySelectorAll('.piece-slot')];
+  const slots = [...document.getElementById('pieces-container').querySelectorAll('.piece-slot')];
 
   const pieces = slots.map(slot => {
     const img = slot.querySelector('img.slot-img');
@@ -220,11 +220,12 @@ function saveNewLook() {
     const productUrl = urlInput?.value.trim() || '';
     // Reject javascript: protocol URLs
     const safeProductUrl = /^https?:\/\//i.test(productUrl) ? productUrl : '';
-    const fallbackImageUrl = slot.querySelector('.slot-fallback input')?.value.trim() || '';
+    const rawFallbackUrl = slot.querySelector('.slot-fallback input')?.value.trim() || '';
+    const safeFallbackUrl = /^https?:\/\//i.test(rawFallbackUrl) ? rawFallbackUrl : '';
     return {
       id: uuid(),
       productUrl: safeProductUrl,
-      imageUrl: imageUrl || fallbackImageUrl,
+      imageUrl: imageUrl || safeFallbackUrl,
       name: slot.querySelector('[data-field="name"]')?.value.trim() || 'Untitled piece',
       brand: slot.querySelector('[data-field="brand"]')?.value.trim() || '',
       price: slot.querySelector('[data-field="price"]')?.value.trim() || '',
