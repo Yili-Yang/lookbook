@@ -3,42 +3,68 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Summer Lookbook</title>
+  <title>My Lookbook</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
   <header>
-    <div class="header-inner">
-      <div>
-        <p class="eyebrow">A personal lookbook</p>
-        <h1>Summer.</h1>
-        <p class="lede">Outfits in the spirit of Tim Dessaint &mdash; neutral, considered, a little Mediterranean. Built to be yours.</p>
-      </div>
-      <div class="header-meta">
-        <span id="saved-count">0 saved</span>
+    <div class="topbar">
+      <h1>Lookbook</h1>
+      <div class="topbar-actions">
+        <button class="btn-ghost" id="btn-prefs">Preferences</button>
+        <button class="btn-primary" id="btn-add">+ Add Look</button>
       </div>
     </div>
     <nav class="filters">
       <button class="filter-btn active" data-filter="all">All</button>
-      <button class="filter-btn" data-filter="saved">★ Saved</button>
-      <button class="filter-btn" data-filter="smart-casual">Smart casual</button>
-      <button class="filter-btn" data-filter="relaxed">Relaxed</button>
-      <button class="filter-btn" data-filter="elevated">Elevated</button>
+      <button class="filter-btn" data-filter="starred">★ Starred</button>
     </nav>
   </header>
 
-  <main id="looks-container"></main>
+  <main id="looks-grid"></main>
 
-  <footer>
-    <div class="footer-inner">
-      <p class="footer-text">To add real product photos: save the image from the brand's site to <code>images/</code> with the filename shown in <code>looks.json</code>, and refresh this page.</p>
-      <p class="footer-text small">Saved looks and notes are stored in your browser's local storage on this device.</p>
+  <!-- Add Look modal -->
+  <div id="modal-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-title">Add Look</h2>
+        <button class="btn-icon" id="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label for="look-title">Look title</label>
+          <input type="text" id="look-title" placeholder="e.g. Navy linen weekend" autocomplete="off">
+        </div>
+        <div id="pieces-container"></div>
+        <button class="btn-ghost btn-sm" id="btn-add-piece">+ Add piece</button>
+        <div class="form-field" style="margin-top:16px">
+          <label for="look-notes">Notes <span class="label-optional">(optional)</span></label>
+          <textarea id="look-notes" placeholder="Where you'd wear it, fit notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="btn-cancel">Cancel</button>
+        <button class="btn-primary" id="btn-save" disabled>Save Look</button>
+      </div>
     </div>
-  </footer>
+  </div>
 
+  <!-- Preferences drawer -->
+  <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
+  <aside id="prefs-drawer" class="drawer hidden" aria-label="Style preferences">
+    <div class="drawer-header">
+      <h2>My Style</h2>
+      <button class="btn-icon" id="drawer-close" aria-label="Close">✕</button>
+    </div>
+    <textarea id="prefs-text" placeholder="Write anything — fits you like, colors, brands, what to avoid, wardrobe gaps..."></textarea>
+  </aside>
+
+  <script src="store.js"></script>
+  <script src="fetch.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
