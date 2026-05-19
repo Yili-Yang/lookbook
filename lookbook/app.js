@@ -269,13 +269,14 @@ function deleteLook(id) {
 }
 
 function startTitleEdit(id, el) {
+  let cancelled = false;
   const input = document.createElement('input');
   input.className = 'look-title-input';
   input.value = el.textContent;
-  input.onblur = () => saveTitleEdit(id, input);
+  input.onblur = () => { if (!cancelled) saveTitleEdit(id, input); };
   input.onkeydown = e => {
     if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-    if (e.key === 'Escape') { el.style.display = ''; input.remove(); }
+    if (e.key === 'Escape') { cancelled = true; el.style.display = ''; input.remove(); }
   };
   el.style.display = 'none';
   el.parentNode.insertBefore(input, el);
