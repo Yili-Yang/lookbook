@@ -62,6 +62,45 @@
   const r3 = parseProductPage(html3, 'https://store.example.com/item');
   assert('price regex fallback', r3.price, '$49.90');
 
+  // parseProductPage: OFFICE pages expose Amplience product images in lazy attributes
+  const officeHtml = `<html><head>
+    <title>OFFICE Max Oxford Brogues Black Leather - Men's Smart Shoes</title>
+  </head><body>
+    <img alt="OFFICEMax Oxford BroguesBlack Leather"
+         data-src="//cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&amp;fmt=auto&amp;qlt=default">
+    <span>£49.99</span>
+  </body></html>`;
+  const officeResult = parseProductPage(officeHtml, 'https://www.office.co.uk/view/product/office_catalog/1,70/5207000078090');
+  assert('OFFICE lazy data-src image', officeResult.imageUrl, 'https://cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&fmt=auto&qlt=default');
+  assert('OFFICE pound price fallback', officeResult.price, '£49.99');
+
+  // parseProductPage: chooses the largest OFFICE image from srcset
+  const officeSrcsetHtml = `<html><body>
+    <picture>
+      <source srcset="//cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&w=640 640w,
+                      //cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&w=1200 1200w">
+    </picture>
+  </body></html>`;
+  const officeSrcsetResult = parseProductPage(officeSrcsetHtml, 'https://www.office.co.uk/view/product/office_catalog/1,70/5207000078090');
+  assert('OFFICE srcset largest image', officeSrcsetResult.imageUrl, 'https://cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&w=1200');
+
+  // parseProductPage: extracts Product JSON-LD images
+  const jsonLdHtml = `<html><head>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "Mansel 4 Eye Derby Shoes",
+        "image": [
+          {"@type": "ImageObject", "url": "https://cdn.media.amplience.net/i/office/5089002514_sd1.jpg?$newhighres$"},
+          "https://cdn.media.amplience.net/i/office/5089002514_dt1.jpg?$newhighres$"
+        ]
+      }
+    <\/script>
+  </head></html>`;
+  const jsonLdResult = parseProductPage(jsonLdHtml, 'https://www.office.co.uk/view/product/office_catalog/7,500/5089002514');
+  assert('Product JSON-LD image', jsonLdResult.imageUrl, 'https://cdn.media.amplience.net/i/office/5089002514_sd1.jpg?$newhighres$');
+
   out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
   localStorage.clear();
 </script>
