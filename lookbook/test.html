@@ -125,6 +125,20 @@ Black leather loafers for smart casual outfits.
   assert('Product query targets Office product pages', buildProductQuery(parsedIdeas[1]), '"www.office.co.uk/view/product/office_catalog" loafers leather black smart casual office miller snaffle shoes');
   assert('Office fallback links include smart shoes', getOfficeFallbackLinks(parsedIdeas[1]).some(link => link.url === 'https://www.office.co.uk/mens/smart-shoes'), true);
 
+  // parsePinterestMarkdownResults: extracts public Pinterest pin ideas
+  const pinterestMarkdown = `
+[![Image 1: Chic and effortless everyday outfit featuring a cozy blue sweater, breezy linen pants, and perfectly styled accessories. #minimaliststyle #neutralstyle](https://i.pinimg.com/236x/example.jpg)](https://www.pinterest.com/pin/123456789/)
+`;
+  const pinterestIdeas = parsePinterestMarkdownResults(pinterestMarkdown, 'minimal neutral everyday outfit inspiration');
+  assert('Pinterest pin result count', pinterestIdeas.length, 1);
+  assert('Pinterest pin source', pinterestIdeas[0].sourceType, 'Pinterest');
+  assert('Pinterest pin url', pinterestIdeas[0].url, 'https://www.pinterest.com/pin/123456789/');
+
+  // buildSourceSearchIdeas: fallback cards keep broad prompts useful
+  const fallbackIdeas = buildSourceSearchIdeas('minimal neutral everyday outfit inspiration', 'all');
+  assert('Fallback ideas exist', fallbackIdeas.length > 0, true);
+  assert('Fallback includes Pinterest', fallbackIdeas.some(idea => idea.sourceType === 'Pinterest'), true);
+
   out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
   localStorage.clear();
 </script>
