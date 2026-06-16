@@ -5,6 +5,7 @@
 <pre id="out"></pre>
 <script src="store.js"></script>
 <script src="fetch.js"></script>
+<script src="ideas.js"></script>
 <script>
   const out = document.getElementById('out');
   let passed = 0, failed = 0;
@@ -61,6 +62,82 @@
   const html3 = `<html><body>Price: $49.90</body></html>`;
   const r3 = parseProductPage(html3, 'https://store.example.com/item');
   assert('price regex fallback', r3.price, '$49.90');
+
+  // parseProductPage: OFFICE pages expose Amplience product images in lazy attributes
+  const officeHtml = `<html><head>
+    <title>OFFICE Max Oxford Brogues Black Leather - Men's Smart Shoes</title>
+  </head><body>
+    <img alt="OFFICEMax Oxford BroguesBlack Leather"
+         data-src="//cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&amp;fmt=auto&amp;qlt=default">
+    <span>£49.99</span>
+  </body></html>`;
+  const officeResult = parseProductPage(officeHtml, 'https://www.office.co.uk/view/product/office_catalog/1,70/5207000078090');
+  assert('OFFICE lazy data-src image', officeResult.imageUrl, 'https://cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&fmt=auto&qlt=default');
+  assert('OFFICE pound price fallback', officeResult.price, '£49.99');
+
+  // parseProductPage: chooses the largest OFFICE image from srcset
+  const officeSrcsetHtml = `<html><body>
+    <picture>
+      <source srcset="//cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&w=640 640w,
+                      //cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&w=1200 1200w">
+    </picture>
+  </body></html>`;
+  const officeSrcsetResult = parseProductPage(officeSrcsetHtml, 'https://www.office.co.uk/view/product/office_catalog/1,70/5207000078090');
+  assert('OFFICE srcset largest image', officeSrcsetResult.imageUrl, 'https://cdn.media.amplience.net/i/office/5207000078_sd1.jpg?$newhighres$&w=1200');
+
+  // parseProductPage: extracts Product JSON-LD images
+  const jsonLdHtml = `<html><head>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "Mansel 4 Eye Derby Shoes",
+        "image": [
+          {"@type": "ImageObject", "url": "https://cdn.media.amplience.net/i/office/5089002514_sd1.jpg?$newhighres$"},
+          "https://cdn.media.amplience.net/i/office/5089002514_dt1.jpg?$newhighres$"
+        ]
+      }
+    <\/script>
+  </head></html>`;
+  const jsonLdResult = parseProductPage(jsonLdHtml, 'https://www.office.co.uk/view/product/office_catalog/7,500/5089002514');
+  assert('Product JSON-LD image', jsonLdResult.imageUrl, 'https://cdn.media.amplience.net/i/office/5089002514_sd1.jpg?$newhighres$');
+
+  // parseBingMarkdownResults: decodes Bing redirect URLs
+  const targetUrl = 'https://www.youtube.com/watch?v=summerfits';
+  const encodedTarget = 'a1' + btoa(targetUrl).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const searchMarkdown = `
+1.   ## [**Summer outfit ideas**](https://www.bing.com/ck/a?!&&u=${encodedTarget}&ntb=1)
+
+Tim Dessaint inspired minimal summer outfit ideas with linen and loafers.
+
+2.   ## [**Office Miller Snaffle Loafers**](https://www.office.co.uk/view/product/office_catalog/7,326/5373400078)
+
+Black leather loafers for smart casual outfits.
+`;
+  const parsedIdeas = parseBingMarkdownResults(searchMarkdown);
+  assert('Bing markdown result count', parsedIdeas.length, 2);
+  assert('Bing redirect decoded', parsedIdeas[0].url, targetUrl);
+  assert('Bing markdown title cleaned', parsedIdeas[0].title, 'Summer outfit ideas');
+  assert('Shopping terms prefer product words', extractShoppingTerms(parsedIdeas[1].snippet), 'loafers leather black smart casual');
+
+  // buildInspirationQuery: source-specific searches include source constraints
+  assert('Pinterest query includes site filter', buildInspirationQuery('linen summer outfit', 'pinterest'), 'site:pinterest.com "linen summer outfit" "outfit ideas" fashion style -definition -dictionary inspiration');
+  assert('Product query targets Office product pages', buildProductQuery(parsedIdeas[1]), '"www.office.co.uk/view/product/office_catalog" loafers leather black smart casual office miller snaffle shoes');
+  assert('Office fallback links include smart shoes', getOfficeFallbackLinks(parsedIdeas[1]).some(link => link.url === 'https://www.office.co.uk/mens/smart-shoes'), true);
+
+  // parsePinterestMarkdownResults: extracts public Pinterest pin ideas
+  const pinterestMarkdown = `
+[![Image 1: Chic and effortless everyday outfit featuring a cozy blue sweater, breezy linen pants, and perfectly styled accessories. #minimaliststyle #neutralstyle](https://i.pinimg.com/236x/example.jpg)](https://www.pinterest.com/pin/123456789/)
+`;
+  const pinterestIdeas = parsePinterestMarkdownResults(pinterestMarkdown, 'minimal neutral everyday outfit inspiration');
+  assert('Pinterest pin result count', pinterestIdeas.length, 1);
+  assert('Pinterest pin source', pinterestIdeas[0].sourceType, 'Pinterest');
+  assert('Pinterest pin url', pinterestIdeas[0].url, 'https://www.pinterest.com/pin/123456789/');
+
+  // buildSourceSearchIdeas: fallback cards keep broad prompts useful
+  const fallbackIdeas = buildSourceSearchIdeas('minimal neutral everyday outfit inspiration', 'all');
+  assert('Fallback ideas exist', fallbackIdeas.length > 0, true);
+  assert('Fallback includes Pinterest', fallbackIdeas.some(idea => idea.sourceType === 'Pinterest'), true);
 
   out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
   localStorage.clear();

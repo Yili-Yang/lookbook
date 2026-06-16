@@ -16,6 +16,10 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function escAttr(s) {
+  return esc(s).replace(/'/g, '&#39;');
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 function renderGrid() {
   const grid = document.getElementById('looks-grid');
@@ -79,12 +83,13 @@ function renderLook(look) {
 // ── Modal ──────────────────────────────────────────────────────────────────
 let pieceSlotCount = 0;
 
-function openModal() {
+function openModal(prefill = {}) {
   pieceSlotCount = 0;
-  document.getElementById('look-title').value = '';
-  document.getElementById('look-notes').value = '';
+  document.getElementById('look-title').value = prefill.title || '';
+  document.getElementById('look-notes').value = prefill.notes || '';
   document.getElementById('pieces-container').innerHTML = '';
   document.getElementById('btn-save').disabled = true;
+  document.getElementById('btn-add-piece').style.display = '';
   document.getElementById('modal-overlay').classList.remove('hidden');
   addPieceSlot();
   addPieceSlot();
@@ -134,6 +139,7 @@ function addPieceSlot() {
   document.getElementById('pieces-container').appendChild(slot);
   if (pieceSlotCount >= 3) document.getElementById('btn-add-piece').style.display = 'none';
   updateSaveButton();
+  return slot;
 }
 
 function removePieceSlot(btn) {
@@ -241,6 +247,131 @@ function saveNewLook() {
   renderGrid();
 }
 
+function openModalFromProduct(productUrl, ideaTitle) {
+  openModal({ title: ideaTitle || 'Internet inspiration' });
+  const firstSlot = document.getElementById('pieces-container').querySelector('.piece-slot');
+  const urlInput = firstSlot?.querySelector('.slot-url-row input');
+  if (!urlInput) return;
+
+  urlInput.value = productUrl;
+  triggerFetch(firstSlot);
+}
+
+// ── Internet ideas ──────────────────────────────────────────────────────────
+let currentIdeas = [];
+
+function openIdeasModal() {
+  const savedPrefs = loadPrefs();
+  const promptEl = document.getElementById('ideas-prompt');
+  if (!promptEl.value.trim()) {
+    promptEl.value = savedPrefs || 'minimal neutral everyday outfit inspiration';
+  }
+  document.getElementById('ideas-overlay').classList.remove('hidden');
+  promptEl.focus();
+}
+
+function closeIdeasModal() {
+  document.getElementById('ideas-overlay').classList.add('hidden');
+}
+
+async function fetchIdeasFromInternet() {
+  const prompt = document.getElementById('ideas-prompt').value.trim();
+  const source = document.getElementById('ideas-source').value;
+  const statusEl = document.getElementById('ideas-status');
+  const resultsEl = document.getElementById('ideas-results');
+
+  statusEl.className = 'slot-status';
+  statusEl.innerHTML = `<span class="spinner"></span> Searching the internet...`;
+  statusEl.style.display = 'flex';
+  resultsEl.innerHTML = '';
+
+  try {
+    currentIdeas = await fetchInspirationIdeas(prompt, source);
+    if (currentIdeas.length === 0) {
+      statusEl.className = 'slot-status error';
+      statusEl.textContent = 'No useful ideas found. Try a broader prompt or another source.';
+      return;
+    }
+
+    statusEl.style.display = 'none';
+    renderIdeas();
+  } catch (err) {
+    statusEl.className = 'slot-status error';
+    statusEl.textContent = "Couldn't fetch ideas right now. Try another source or prompt.";
+  }
+}
+
+function renderIdeas() {
+  const resultsEl = document.getElementById('ideas-results');
+  resultsEl.innerHTML = currentIdeas.map(renderIdeaCard).join('');
+}
+
+function renderIdeaCard(idea, idx) {
+  const searchLinks = getShoppingSearchUrls(idea).map(link => `
+    <a class="idea-action-link" href="${esc(link.url)}" target="_blank" rel="noopener">${esc(link.label)}</a>
+  `).join('');
+
+  return `
+    <article class="idea-card" data-idea-index="${idx}">
+      <div class="idea-card-header">
+        <h3 class="idea-title">${esc(idea.title)}</h3>
+        <span class="idea-source">${esc(idea.sourceType)}</span>
+      </div>
+      ${idea.snippet ? `<p class="idea-snippet">${esc(idea.snippet)}</p>` : ''}
+      <div class="idea-actions">
+        <a class="idea-action-link" href="${esc(idea.url)}" target="_blank" rel="noopener">Open source</a>
+        <button class="idea-action-link" type="button" onclick="fetchProductsForIdea(${idx}, this)">Fetch Office product links</button>
+        ${searchLinks}
+      </div>
+      <div class="product-results" style="display:none"></div>
+    </article>
+  `;
+}
+
+async function fetchProductsForIdea(idx, btn) {
+  const idea = currentIdeas[idx];
+  if (!idea) return;
+
+  const card = btn.closest('.idea-card');
+  const resultsEl = card.querySelector('.product-results');
+
+  btn.disabled = true;
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = `<div class="slot-status"><span class="spinner"></span> Finding Office product links...</div>`;
+
+  try {
+    const products = await fetchProductLinksForIdea(idea);
+    if (products.length === 0) {
+      resultsEl.innerHTML = `<div class="slot-status error">No Office product links found. Try the shopping search links above.</div>`;
+      return;
+    }
+
+    resultsEl.innerHTML = `
+      <div class="product-results-title">Office product links</div>
+      ${products.map(product => renderProductResult(product, idea.title)).join('')}
+    `;
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="slot-status error">Couldn't fetch product links right now.</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderProductResult(product, ideaTitle) {
+  const canUseInLook = /office\.co\.uk\/view\/product\/office_catalog/i.test(product.url);
+  return `
+    <div class="product-result">
+      <div class="product-result-name">${esc(product.title)}</div>
+      ${product.snippet ? `<div class="product-result-snippet">${esc(product.snippet)}</div>` : ''}
+      <div class="product-link-actions">
+        <a class="product-result-link" href="${esc(product.url)}" target="_blank" rel="noopener">Open product</a>
+        ${canUseInLook ? `<button class="product-result-link" type="button"
+                onclick="openModalFromProduct('${escAttr(product.url)}', '${escAttr(ideaTitle)}')">Use in look</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 // ── Preferences drawer ─────────────────────────────────────────────────────
 function openDrawer() {
   document.getElementById('prefs-text').value = loadPrefs();
@@ -323,6 +454,18 @@ function init() {
     if (e.target === document.getElementById('modal-overlay')) closeModal();
   });
 
+  // Internet ideas modal
+  document.getElementById('btn-ideas').addEventListener('click', openIdeasModal);
+  document.getElementById('ideas-close').addEventListener('click', closeIdeasModal);
+  document.getElementById('ideas-cancel').addEventListener('click', closeIdeasModal);
+  document.getElementById('btn-fetch-ideas').addEventListener('click', fetchIdeasFromInternet);
+  document.getElementById('ideas-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('ideas-overlay')) closeIdeasModal();
+  });
+  document.getElementById('ideas-prompt').addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') fetchIdeasFromInternet();
+  });
+
   // Preferences drawer
   document.getElementById('btn-prefs').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
@@ -333,6 +476,7 @@ function init() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
+      if (!document.getElementById('ideas-overlay').classList.contains('hidden')) closeIdeasModal();
       if (!document.getElementById('prefs-drawer').classList.contains('hidden')) closeDrawer();
     }
   });
