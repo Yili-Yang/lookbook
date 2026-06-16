@@ -16,6 +16,7 @@
       <h1>Lookbook</h1>
       <div class="topbar-actions">
         <button class="btn-ghost" id="btn-prefs">Preferences</button>
+        <button class="btn-ghost" id="btn-ideas">Find Ideas</button>
         <button class="btn-primary" id="btn-add">+ Add Look</button>
       </div>
     </div>
@@ -53,6 +54,46 @@
     </div>
   </div>
 
+  <!-- Internet inspiration modal -->
+  <div id="ideas-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ideas-title">
+    <div class="modal ideas-modal">
+      <div class="modal-header">
+        <div>
+          <h2 id="ideas-title">Find Internet Ideas</h2>
+          <p class="modal-subtitle">Search influencer, social, and style sources for outfit inspiration.</p>
+        </div>
+        <button class="btn-icon" id="ideas-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label for="ideas-prompt">What kind of outfit?</label>
+          <textarea id="ideas-prompt" placeholder="e.g. Minimal neutral summer dinner outfit, smart casual office look, Tim Dessaint style..."></textarea>
+        </div>
+        <div class="ideas-controls">
+          <div class="form-field">
+            <label for="ideas-source">Source</label>
+            <select id="ideas-source">
+              <option value="all">Influencers + style sites</option>
+              <option value="influencer">Influencers</option>
+              <option value="pinterest">Pinterest</option>
+              <option value="youtube">YouTube</option>
+              <option value="instagram">Instagram</option>
+              <option value="tiktok">TikTok</option>
+              <option value="street">Street style</option>
+              <option value="blogs">Style blogs</option>
+            </select>
+          </div>
+          <button class="btn-primary" id="btn-fetch-ideas">Fetch Ideas</button>
+        </div>
+        <div id="ideas-status" class="slot-status" style="display:none"></div>
+        <div id="ideas-results" class="ideas-results"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="ideas-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Preferences drawer -->
   <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
   <aside id="prefs-drawer" class="drawer hidden" aria-label="Style preferences">
@@ -65,6 +106,7 @@
 
   <script src="store.js"></script>
   <script src="fetch.js"></script>
+  <script src="ideas.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
