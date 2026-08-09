@@ -39,6 +39,7 @@
           <label for="look-title">Look title</label>
           <input type="text" id="look-title" placeholder="e.g. Navy linen weekend" autocomplete="off">
         </div>
+        <p class="modal-hint">Paste a product page link and pick the photo you want. Each photo is copied into your lookbook, so it keeps working even if the shop's link stops.</p>
         <div id="pieces-container"></div>
         <button class="btn-ghost btn-sm" id="btn-add-piece">+ Add piece</button>
         <div class="form-field" style="margin-top:16px">
@@ -61,10 +62,12 @@
       <button class="btn-icon" id="drawer-close" aria-label="Close">✕</button>
     </div>
     <textarea id="prefs-text" placeholder="Write anything — fits you like, colors, brands, what to avoid, wardrobe gaps..."></textarea>
+    <p class="drawer-foot" id="storage-meter"></p>
   </aside>
 
   <script src="store.js"></script>
   <script src="fetch.js"></script>
+  <script src="image.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
