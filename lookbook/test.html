@@ -148,6 +148,23 @@
   assert('size hints are read from the url', sizeHint('https://cdn.example.com/a_2000x2000.jpg'), 2000);
   assert('size hints are read from query parameters', sizeHint('https://cdn.example.com/a.jpg?wid=1200'), 1200);
 
+  // Shops that give every page the same title still name the product in the URL.
+  assert('keywords come from the url slug too',
+    keywordsFrom('Allbirds Shoes', 'https://www.allbirds.com/products/mens-wool-runner-go'),
+    ['allbirds', 'shoes', 'wool', 'runner']);
+
+  const genericTitle = `<html><head><meta property="og:title" content="Allbirds Shoes"></head><body>
+    <img src="https://cdn.example.com/tree_dasher_pdp.png" alt="" width="900" height="900">
+    <img src="https://cdn.example.com/wool_runner_pdp.png" alt="" width="900" height="900">
+  </body></html>`;
+  assert('the product named in the url wins',
+    parseProductPage(genericTitle, 'https://www.allbirds.com/products/mens-wool-runner').imageUrl,
+    'https://cdn.example.com/wool_runner_pdp.png');
+
+  assert('shop error pages are recognised',
+    [looksLikeErrorPage({ name: '404 Not Found' }), looksLikeErrorPage({ name: 'Just a moment...' }), looksLikeErrorPage({ name: 'Linen Shirt' })],
+    [true, true, false]);
+
   // ── Reader (markdown) fallback ───────────────────────────────────────────
   const markdown = `Title: AIRism Cotton T-Shirt | UNIQLO US
 

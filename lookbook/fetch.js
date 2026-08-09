@@ -52,6 +52,9 @@ async function fetchProductData(productUrl, { onProgress = () => {} } = {}) {
     try {
       const body = await fetchText(...strategy.request(url));
       const data = { ...strategy.parse(body, url), source: strategy.name };
+      // Proxies often answer with the shop's error or bot-check page while
+      // still reporting success, and its images are never what was asked for.
+      if (looksLikeErrorPage(data)) throw new Error('error_page');
       // A page whose only images look like logos or icons is worth retrying
       // elsewhere, but keep it in case every remaining source fails too.
       if (data.images.some(image => image.score > 0)) return data;
@@ -79,6 +82,12 @@ async function fetchText(url, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+const ERROR_PAGE_TITLE = /^\s*(?:40[0-9]|50[0-9]|error|page not found|not found|access denied|forbidden|are you a robot|just a moment)\b/i;
+
+function looksLikeErrorPage(data) {
+  return ERROR_PAGE_TITLE.test(data.name || '');
 }
 
 function normalizePageUrl(value) {
@@ -123,7 +132,7 @@ function parseProductPage(html, productUrl) {
 
   const images = rankImageCandidates(collectImageCandidates(doc, html), {
     productUrl,
-    keywords: keywordsFrom(rawTitle),
+    keywords: keywordsFrom(rawTitle, productUrl),
   });
 
   return { imageUrl: images[0]?.url || '', images, name, brand, price, productUrl };
@@ -141,7 +150,7 @@ function parseReaderText(markdown, productUrl) {
     raw.push({ url: match[2], alt: match[1].replace(/^Image\s+\d+:\s*/i, ''), origin: 'markdown' });
   }
 
-  const images = rankImageCandidates(raw, { productUrl, keywords: keywordsFrom(title) });
+  const images = rankImageCandidates(raw, { productUrl, keywords: keywordsFrom(title, productUrl) });
 
   return {
     imageUrl: images[0]?.url || '',
@@ -176,14 +185,28 @@ function brandFromHostname(productUrl) {
 const TITLE_STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'shop', 'buy', 'men', 'mens', 'women', 'womens',
   'unisex', 'new', 'online', 'store', 'official', 'com', 'size', 'color', 'colour',
+  'product', 'products', 'item', 'items', 'category', 'collection', 'collections',
+  'html', 'htm', 'aspx', 'php', 'index', 'default',
 ]);
 
-function keywordsFrom(title) {
-  return String(title ?? '')
+// Words that identify this particular product. The page title is the obvious
+// source, but plenty of shops give every page the same generic title, so the
+// URL slug — which names the product almost every time — is used as well.
+function keywordsFrom(title, productUrl = '') {
+  const fromTitle = tokenizeKeywords(title);
+  let fromSlug = [];
+  try {
+    fromSlug = tokenizeKeywords(new URL(productUrl).pathname);
+  } catch { /* not a usable URL */ }
+
+  return [...new Set([...fromTitle, ...fromSlug])].slice(0, 10);
+}
+
+function tokenizeKeywords(text) {
+  return String(text ?? '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter(word => word.length > 2 && !TITLE_STOPWORDS.has(word))
-    .slice(0, 8);
+    .filter(word => word.length > 2 && !/^\d+$/.test(word) && !TITLE_STOPWORDS.has(word));
 }
 
 // ── Image candidates ───────────────────────────────────────────────────────
