@@ -742,6 +742,7 @@ main {
   font-size: 11px;
   color: var(--ink-faint);
 }
+.drawer-foot.warning { color: #c0392b; }
 
 /* ── Responsive ── */
 @media (max-width: 640px) {

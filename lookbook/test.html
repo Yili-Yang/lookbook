@@ -63,6 +63,23 @@
   const html4 = `<html><body>Price: £45.00</body></html>`;
   assert('non-dollar price', parseProductPage(html4, 'https://store.example.com/x').price, '£45.00');
 
+  const bannerHtml = `<html><body>
+    <div class="promo">Free shipping over $9.99</div>
+    <span class="product-price">$59.00</span>
+  </body></html>`;
+  assert('labelled price beats a promo banner',
+    parseProductPage(bannerHtml, 'https://store.example.com/x').price, '$59.00');
+
+  assert('amounts inside inline scripts are ignored',
+    parseProductPage('<html><body><script>{"shipping":"$999.00"}</' + 'script>No price here</body></html>', 'https://store.example.com/x').price,
+    '');
+
+  // Uniqlo's page states its shipping fee in prose and never its own price.
+  const shippingHtml = `<html><body><p>Shipping Fee: Standard shipping is $7.99.
+    Free shipping for purchases over $99 or for in-store pickup.</p></body></html>`;
+  assert('a shipping fee is not mistaken for the price',
+    parseProductPage(shippingHtml, 'https://store.example.com/x').price, '');
+
   // ── Image candidates ─────────────────────────────────────────────────────
   assert('normalize resolves relative urls',
     normalizeImageUrl('/media/shirt.jpg', 'https://shop.example.com/p/1'),
@@ -105,14 +122,27 @@
       > scoreImageCandidate({ url: 'https://cdn.example.com/12345.jpg', origin: 'img' }, ['linen', 'shirt']),
     true);
 
-  const jsonLd = `<html><head><script type="application/ld+json">
+  const jsonLd = `<html><head>
+    <meta property="og:site_name" content="Shop Example">
+    <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"Product","name":"Linen Shirt",
+     "brand":{"@type":"Brand","name":"Sunspel"},
+     "offers":{"@type":"Offer","price":"110.00","priceCurrency":"GBP"},
      "image":["https://cdn.example.com/ld-1.jpg","https://cdn.example.com/ld-2.jpg"]}
-  </` + `script></head><body></body></html>`;
+    </` + `script></head><body>Free delivery over $9.99</body></html>`;
   const ld = parseProductPage(jsonLd, 'https://shop.example.com/p');
   assert('json-ld product images are collected',
     ld.images.map(i => i.url).sort(),
     ['https://cdn.example.com/ld-1.jpg', 'https://cdn.example.com/ld-2.jpg']);
+  // Without this the shipping threshold in the page body becomes the price.
+  assert('json-ld offer beats a stray dollar amount', ld.price, '£110.00');
+  assert('json-ld brand beats the shop name', ld.brand, 'Sunspel');
+
+  assert('aggregate offers fall back to the low price',
+    parseProductPage(`<html><head><script type="application/ld+json">
+      {"@type":"Product","offers":{"@type":"AggregateOffer","lowPrice":"49","priceCurrency":"USD"}}
+    </` + `script></head></html>`, 'https://shop.example.com/p').price,
+    '$49');
 
   const srcsetHtml = `<html><body>
     <img src="https://cdn.example.com/p_200.jpg"

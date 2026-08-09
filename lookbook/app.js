@@ -525,11 +525,20 @@ function closeDrawer() {
   document.getElementById('drawer-backdrop').classList.add('hidden');
 }
 
+// Browsers cap localStorage near 5 MB, and saved photos are what fill it, so
+// the number is worth showing before a save starts failing.
+const STORAGE_WARN_BYTES = 3.5 * 1024 * 1024;
+
 function updateStorageMeter() {
   const el = document.getElementById('storage-meter');
   if (!el) return;
   const photos = looks.reduce((total, look) => total + (look.pieces || []).filter(p => p.imageData).length, 0);
-  el.textContent = `${looks.length} look${looks.length === 1 ? '' : 's'} · ${photos} saved photo${photos === 1 ? '' : 's'} · ${formatBytes(storageUsage())} used`;
+  const used = storageUsage();
+  const summary = `${looks.length} look${looks.length === 1 ? '' : 's'} · ${photos} saved photo${photos === 1 ? '' : 's'} · ${formatBytes(used)} used`;
+  el.textContent = used > STORAGE_WARN_BYTES
+    ? `${summary} — running low, delete a look to free space`
+    : summary;
+  el.classList.toggle('warning', used > STORAGE_WARN_BYTES);
 }
 
 // ── Card interactions ──────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ const FETCH_STRATEGIES = [
   },
 ];
 
-const MAX_CANDIDATES = 14;
+const MAX_CANDIDATES = 20;
 
 async function fetchProductData(productUrl, { onProgress = () => {} } = {}) {
   const url = normalizePageUrl(productUrl);
@@ -116,21 +116,18 @@ function parseProductPage(html, productUrl) {
 
   const rawTitle = getMeta('meta[property="og:title"]', 'meta[name="twitter:title"]') || doc.title || '';
   const name = cleanTitle(rawTitle);
+  const jsonLd = readJsonLdProduct(doc);
 
-  const priceAmount = getMeta('meta[property="product:price:amount"]', 'meta[property="og:price:amount"]');
-  const priceCurrency = getMeta('meta[property="product:price:currency"]', 'meta[property="og:price:currency"]');
-  let price = '';
-  if (priceAmount) {
-    const symbol = (!priceCurrency || priceCurrency === 'USD') ? '$' : priceCurrency + ' ';
-    price = symbol + priceAmount;
-  } else {
-    price = findPriceInText(html);
-  }
+  // A bare regex over the page is the last resort: it happily returns the
+  // shipping threshold from a promo banner instead of what the item costs.
+  const price = formatPrice(
+    getMeta('meta[property="product:price:amount"]', 'meta[property="og:price:amount"]'),
+    getMeta('meta[property="product:price:currency"]', 'meta[property="og:price:currency"]'),
+  ) || formatPrice(jsonLd.price, jsonLd.currency) || findPriceInDocument(doc, html);
 
-  const siteName = getMeta('meta[property="og:site_name"]');
-  const brand = siteName || brandFromHostname(productUrl);
+  const brand = jsonLd.brand || getMeta('meta[property="og:site_name"]') || brandFromHostname(productUrl);
 
-  const images = rankImageCandidates(collectImageCandidates(doc, html), {
+  const images = rankImageCandidates(collectImageCandidates(doc, html, jsonLd.images), {
     productUrl,
     keywords: keywordsFrom(rawTitle, productUrl),
   });
@@ -157,7 +154,7 @@ function parseReaderText(markdown, productUrl) {
     images,
     name,
     brand: brandFromHostname(productUrl),
-    price: findPriceInText(text),
+    price: findLabelledPriceInText(text),
     productUrl,
   };
 }
@@ -168,8 +165,49 @@ function cleanTitle(title) {
   return String(title ?? '').replace(/(?:\s*[|·]\s*|\s+[-–—]\s+).+$/, '').trim();
 }
 
+const PRICE_PATTERN = /[$£€¥]\s?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?/;
+const LABELLED_PRICE = new RegExp(`(?:price|cost|now|sale)[^\\d$£€¥]{0,25}(${PRICE_PATTERN.source})`, 'gi');
+const NOT_A_PRICE = /shipping|delivery|postage|spend|save|voucher|gift ?card|minimum|over/i;
+
 function findPriceInText(text) {
-  return String(text).match(/[$£€]\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?/)?.[0]?.replace(/\s/g, '') || '';
+  return String(text).match(PRICE_PATTERN)?.[0]?.replace(/\s/g, '') || '';
+}
+
+// Used where the surrounding words are all there is to go on. An amount only
+// counts when something nearby calls it a price, and not when it is really a
+// shipping fee or a spend-over-this threshold.
+function findLabelledPriceInText(text) {
+  const haystack = String(text);
+  for (const match of haystack.matchAll(LABELLED_PRICE)) {
+    const context = haystack.slice(Math.max(0, match.index - 60), match.index + match[0].length);
+    if (NOT_A_PRICE.test(context)) continue;
+    return match[1].replace(/\s/g, '');
+  }
+  return '';
+}
+
+// Prefer an amount the page itself labels as a price. Falling straight to a
+// regex tends to return whatever number appears first — a shipping threshold,
+// a discount banner, or a figure buried in inline JSON.
+function findPriceInDocument(doc, html) {
+  const declared = doc.querySelector('[itemprop="price"]')?.getAttribute('content')?.trim();
+  if (declared && /^\d/.test(declared)) {
+    return formatPrice(declared, doc.querySelector('[itemprop="priceCurrency"]')?.getAttribute('content'));
+  }
+
+  for (const el of doc.querySelectorAll('[class*="price" i], [id*="price" i], [data-testid*="price" i]')) {
+    const found = findPriceInText(el.textContent);
+    if (found) return found;
+  }
+
+  return findLabelledPriceInText(visibleText(doc) || html);
+}
+
+function visibleText(doc) {
+  const body = doc.body?.cloneNode(true);
+  if (!body) return '';
+  body.querySelectorAll('script, style, noscript, template').forEach(el => el.remove());
+  return body.textContent || '';
 }
 
 function brandFromHostname(productUrl) {
@@ -224,10 +262,10 @@ const ORIGIN_SCORES = {
   'raw': 4,
 };
 
-function collectImageCandidates(doc, html) {
+function collectImageCandidates(doc, html, jsonLdImages = []) {
   return [
     ...metaImageCandidates(doc),
-    ...jsonLdImageCandidates(doc),
+    ...jsonLdImages.map(url => ({ url, origin: 'json-ld', alt: '' })),
     ...linkImageCandidates(doc),
     ...elementImageCandidates(doc),
     ...styleImageCandidates(doc),
@@ -235,10 +273,12 @@ function collectImageCandidates(doc, html) {
   ];
 }
 
-// Structured product data is the most reliable gallery source on storefronts
-// that hide the real photos behind client-side rendering.
-function jsonLdImageCandidates(doc) {
-  const out = [];
+// Structured product data is the most reliable source on storefronts that hide
+// the real photos behind client-side rendering, and the only place the actual
+// selling price can be told apart from every other number on the page.
+function readJsonLdProduct(doc) {
+  const product = { images: [], price: '', currency: '', brand: '' };
+
   doc.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
     let data;
     try {
@@ -246,34 +286,73 @@ function jsonLdImageCandidates(doc) {
     } catch {
       return;
     }
-    walkJsonLd(data, false, url => out.push({ url, origin: 'json-ld', alt: '' }));
+    walkJsonLd(data, false, product);
   });
-  return out;
+
+  return product;
 }
 
-function walkJsonLd(node, insideProduct, emit) {
+function walkJsonLd(node, insideProduct, product) {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
-    node.forEach(item => walkJsonLd(item, insideProduct, emit));
+    node.forEach(item => walkJsonLd(item, insideProduct, product));
     return;
   }
 
   const types = [node['@type']].flat().filter(Boolean).map(type => String(type).toLowerCase());
   const isProduct = insideProduct || types.some(type => type === 'product' || type === 'productgroup');
 
-  if (isProduct) collectJsonLdImages(node.image, emit);
-  Object.values(node).forEach(child => walkJsonLd(child, isProduct, emit));
+  if (isProduct) {
+    collectJsonLdImages(node.image, product.images);
+    if (!product.brand) product.brand = jsonLdBrand(node.brand);
+    if (!product.price) Object.assign(product, jsonLdPrice(node.offers));
+  }
+
+  Object.values(node).forEach(child => walkJsonLd(child, isProduct, product));
 }
 
-function collectJsonLdImages(value, emit) {
+function collectJsonLdImages(value, images) {
   if (!value) return;
-  if (typeof value === 'string') return emit(value);
-  if (Array.isArray(value)) return value.forEach(item => collectJsonLdImages(item, emit));
+  if (typeof value === 'string') return void images.push(value);
+  if (Array.isArray(value)) return value.forEach(item => collectJsonLdImages(item, images));
   if (typeof value !== 'object') return;
   ['url', 'contentUrl', 'thumbnailUrl'].forEach(key => {
-    if (typeof value[key] === 'string') emit(value[key]);
+    if (typeof value[key] === 'string') images.push(value[key]);
   });
+}
+
+function jsonLdBrand(brand) {
+  if (typeof brand === 'string') return brand.trim();
+  if (Array.isArray(brand)) return jsonLdBrand(brand[0]);
+  if (brand && typeof brand === 'object' && typeof brand.name === 'string') return brand.name.trim();
+  return '';
+}
+
+function jsonLdPrice(offers) {
+  if (!offers) return {};
+  if (Array.isArray(offers)) {
+    for (const offer of offers) {
+      const found = jsonLdPrice(offer);
+      if (found.price) return found;
+    }
+    return {};
+  }
+  if (typeof offers !== 'object') return {};
+
+  const raw = offers.price ?? offers.lowPrice ?? offers.priceSpecification?.price;
+  const price = raw === undefined || raw === null || raw === '' ? '' : String(raw).trim();
+  if (!price || !/^\d/.test(price)) return jsonLdPrice(offers.offers);
+
+  return { price, currency: String(offers.priceCurrency || offers.priceSpecification?.priceCurrency || '').trim() };
+}
+
+const CURRENCY_SYMBOLS = { USD: '$', GBP: '£', EUR: '€', JPY: '¥', CNY: '¥' };
+
+function formatPrice(amount, currency) {
+  if (!amount) return '';
+  const symbol = CURRENCY_SYMBOLS[String(currency || 'USD').toUpperCase()];
+  return symbol ? symbol + amount : `${currency} ${amount}`;
 }
 
 function metaImageCandidates(doc) {

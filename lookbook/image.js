@@ -43,7 +43,7 @@ function probeImage(url) {
 
 // Drops candidates that are broken, blocked, or too small to be a product shot,
 // and re-sorts what is left so bigger photos come first within a score band.
-async function verifyImageCandidates(candidates, { limit = 10 } = {}) {
+async function verifyImageCandidates(candidates, { limit = 16 } = {}) {
   const shortlist = candidates.slice(0, limit);
   const probes = await Promise.all(shortlist.map(candidate => probeImage(candidate.url)));
 
