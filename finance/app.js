@@ -145,7 +145,10 @@ function renderDerived() {
   renderResearchValues();
   renderTodos();
   renderScenarios();
+  renderRunStatus();
   syncFieldInputs();
+  refreshGroupCounts();
+  refreshFieldEffects();
   refreshRowSummaries();
 }
 
@@ -187,6 +190,14 @@ function wireChrome() {
     renderLedger();
   });
   document.getElementById('btn-export-csv').addEventListener('click', onExportCsv);
+
+  // Re-running with the same seed would return the identical answer, since the
+  // draws are reproducible on purpose. So the button advances the seed: the
+  // useful question is whether a conclusion survives a different set of dice.
+  document.getElementById('btn-new-draw').addEventListener('click', () => {
+    state.cfg.values.seed = (state.cfg.values.seed | 0) + 1;
+    update();
+  });
 
   document.getElementById('fan-include-house').addEventListener('change', event => {
     state.fanIncludeHouse = event.target.checked;
@@ -617,6 +628,18 @@ function fieldControl(f, value) {
   return `${unit}<input type="number" id="${id}" data-role="value" step="${step}" value="${esc(value)}">`;
 }
 
+// A field is inactive when a switch elsewhere makes it feed nothing. It stays
+// editable — the value still matters the moment the switch goes on — but it says
+// so, because a setting that silently changes no output is indistinguishable
+// from an app that has stopped recalculating.
+function fieldIsActive(f) {
+  return !f.activeWhen || !!f.activeWhen(state.cfg);
+}
+
+function inactiveText(f) {
+  return `Changing this has no effect right now — ${f.inactiveNote}.`;
+}
+
 function fieldPills(f) {
   const meta = state.cfg.meta[f.key] || {};
   let out = '';
@@ -633,13 +656,15 @@ function fieldRow(f) {
   const value = state.cfg.values[f.key];
   const meta = state.cfg.meta[f.key] || {};
   const ph = isPlaceholder(state.cfg, f.key);
-  return `<div class="field${ph ? ' is-placeholder' : ''}" data-key="${f.key}">
+  const inactive = !fieldIsActive(f);
+  return `<div class="field${ph ? ' is-placeholder' : ''}${inactive ? ' is-inactive' : ''}" data-key="${f.key}">
     <div class="field-main">
       <div class="field-name">
         <label for="f-${f.key}">${esc(f.label)}</label>
         <span class="field-pills">${fieldPills(f)}</span>
       </div>
       <p class="field-help">${esc(f.help)}</p>
+      ${inactive ? `<p class="field-inactive">${esc(inactiveText(f))}</p>` : ''}
     </div>
     <div class="field-input">${fieldControl(f, value)}</div>
     <div class="field-status">
@@ -750,6 +775,50 @@ function suggestRmdAge() {
     row.querySelector('.field-main').appendChild(hint);
   }
   hint.textContent = `Current law suggests ${suggested} for someone born in ${state.cfg.values.birthYear} — use it?`;
+}
+
+// Each group header carries a count of how many placeholders are left inside
+// it. That header lives in markup only rebuilt when the shape of the plan
+// changes, so the count has to be refreshed on its own: marking a field as your
+// own clears its row immediately, and a header above it still insisting on the
+// old number reads as the app having ignored the click. Refreshed in place
+// rather than re-rendered, so open sections stay open.
+function refreshGroupCounts() {
+  for (const group of document.querySelectorAll('#field-groups .group')) {
+    const pill = group.querySelector('summary .pill');
+    if (!pill) continue;
+    const pending = FIELDS.filter(f =>
+      f.group === group.dataset.group && isPlaceholder(state.cfg, f.key)).length;
+    pill.className = `pill ${pending ? 'placeholder' : 'verified'}`;
+    pill.textContent = pending ? `${pending} to replace` : 'done';
+  }
+}
+
+// Whether a field is inactive depends on other fields, so it is re-evaluated
+// after every change rather than only when the rows are built. Updated in place
+// so the row keeps its focus and its typed contents.
+function refreshFieldEffects() {
+  for (const row of document.querySelectorAll('.field')) {
+    const f = FIELDS_BY_KEY[row.dataset.key];
+    if (!f || !f.activeWhen) continue;
+    const active = fieldIsActive(f);
+    row.classList.toggle('is-inactive', !active);
+    const existing = row.querySelector('.field-inactive');
+    if (active) {
+      if (existing) existing.remove();
+      continue;
+    }
+    const note = existing || row.querySelector('.field-main').appendChild(document.createElement('p'));
+    note.className = 'field-inactive';
+    note.textContent = inactiveText(f);
+  }
+}
+
+// What the last simulation actually cost, so the price of a big path count is
+// visible rather than felt as unexplained lag.
+function renderRunStatus() {
+  document.getElementById('run-status').textContent =
+    `${state.mc.nSims.toLocaleString('en-US')} paths, seed ${state.cfg.values.seed}, drawn in ${Math.round(state.lastRunMs)} ms`;
 }
 
 // Levers and imports change values behind the field inputs' backs, so the

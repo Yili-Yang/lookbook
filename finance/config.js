@@ -22,6 +22,13 @@
 // bool   — checkbox
 // choice — one of `options`
 // text   — free text, never used in arithmetic
+//
+// Some fields only feed the model when a switch elsewhere is on: the cost of
+// care means nothing while care is not being modeled, and the fat-tail shape
+// means nothing while returns are drawn lognormally. Those carry `activeWhen`,
+// a predicate on the whole config, and `inactiveNote` saying which switch is
+// holding them back. Editing an inactive field changes no output at all, so
+// without saying so the app looks like it has stopped recalculating.
 
 const FIELDS = [
   // ── Timeline ──────────────────────────────────────────────────────────────
@@ -122,6 +129,8 @@ const FIELDS = [
   {
     key: 'livingExpenseExplicit', group: 'spending', label: 'Explicit annual living expenses', type: 'money',
     def: 0, personal: true,
+    activeWhen: cfg => cfg.values.livingExpenseMode === 'explicit',
+    inactiveNote: 'baseline living expenses are set to the top-down residual',
     help: 'Today\'s-dollars total annual outflow for normal life, including rent or mortgage payments, utilities, and any non-mortgage debt payments. Only used when the mode above is set to explicit.',
   },
   {
@@ -169,6 +178,8 @@ const FIELDS = [
   {
     key: 'reAppreciation', group: 'balances', label: 'Real estate appreciation', type: 'pct',
     def: 0.03, personal: true,
+    activeWhen: cfg => cfg.values.reValue0 > 0,
+    inactiveNote: 'there is no property value to appreciate',
     help: 'Nominal annual appreciation. Setting this equal to inflation means the home holds real value but contributes no real growth, which is a defensible neutral assumption.',
   },
   {
@@ -179,11 +190,15 @@ const FIELDS = [
   {
     key: 'mortRate', group: 'balances', label: 'Mortgage rate', type: 'pct',
     def: 0.035, personal: true,
+    activeWhen: cfg => cfg.values.mortgage0 > 0,
+    inactiveNote: 'the mortgage balance is zero',
     help: 'Annual interest rate on the mortgage above.',
   },
   {
     key: 'mortAnnualPayment', group: 'balances', label: 'Mortgage payment (annualized)', type: 'money',
     def: 24000, personal: true,
+    activeWhen: cfg => cfg.values.mortgage0 > 0,
+    inactiveNote: 'the mortgage balance is zero',
     help: 'Principal and interest only, times 12. Taxes and insurance are part of living expenses, not of amortization. This payment is already inside your living-expense figure — the model amortizes the balance to track equity, it does not withdraw the payment a second time.',
   },
 
@@ -242,16 +257,22 @@ const FIELDS = [
   {
     key: 'ssStartAge', group: 'socialSecurity', label: 'Claiming age', type: 'age',
     def: 67, personal: true,
+    activeWhen: cfg => cfg.values.ssAnnual > 0,
+    inactiveNote: 'the expected benefit is zero',
     help: 'Benefits claimed before full retirement age are permanently reduced and delayed claiming permanently increases them, so the benefit figure above must correspond to this age.',
   },
   {
     key: 'ssTaxablePct', group: 'socialSecurity', label: 'Share of benefit that is federally taxable', type: 'pct',
     def: 0.85, personal: false, research: true,
+    activeWhen: cfg => cfg.values.ssAnnual > 0,
+    inactiveNote: 'the expected benefit is zero',
     help: 'Up to 85% of benefits become federally taxable once provisional income crosses IRS thresholds. Those thresholds are not inflation-indexed, so verify the current figures instead of assuming they are static.',
   },
   {
     key: 'ssFederalRate', group: 'socialSecurity', label: 'Tax rate on the taxable share', type: 'pct',
     def: 0.22, personal: true, research: true,
+    activeWhen: cfg => cfg.values.ssAnnual > 0 && cfg.values.ssTaxablePct > 0,
+    inactiveNote: 'no part of the benefit is treated as taxable',
     help: 'Federal blended rate applied to the taxable portion. Most states do not tax Social Security but a few do — check yours specifically and add it here if it does.',
   },
 
@@ -291,11 +312,15 @@ const FIELDS = [
   {
     key: 'spouseBirthYear', group: 'rmd', label: 'Spouse birth year', type: 'year',
     def: 1986, personal: true,
+    activeWhen: cfg => cfg.values.spousePretaxShare > 0,
+    inactiveNote: 'the spouse share of the pre-tax balance is zero',
     help: 'Only used when the spouse share above is greater than 0.',
   },
   {
     key: 'spouseAge', group: 'rmd', label: 'Spouse age today', type: 'age',
     def: 40, personal: true,
+    activeWhen: cfg => cfg.values.spousePretaxShare > 0,
+    inactiveNote: 'the spouse share of the pre-tax balance is zero',
     help: 'Only used when the spouse share above is greater than 0.',
   },
 
@@ -322,6 +347,8 @@ const FIELDS = [
   {
     key: 'tDf', group: 'monteCarlo', label: 'Fat-tail degrees of freedom', type: 'int',
     def: 5, personal: false,
+    activeWhen: cfg => cfg.values.returnModel === 'fatTail',
+    inactiveNote: 'the return distribution is set to lognormal',
     help: 'Lower means fatter tails; above roughly 30 it is indistinguishable from normal. Draws are rescaled to keep the volatility you specified, so this changes the shape of the tails without changing the standard deviation.',
   },
   {
@@ -332,6 +359,8 @@ const FIELDS = [
   {
     key: 'jobLossIncomePct', group: 'monteCarlo', label: 'Income retained during job loss', type: 'pct',
     def: 0.25, personal: true,
+    activeWhen: cfg => cfg.values.jobLossProb > 0,
+    inactiveNote: 'the annual probability of job loss is zero',
     help: 'Fraction of normal income still arriving in a job-loss year, from severance, unemployment insurance, or a partner who is still working.',
   },
   {
@@ -342,6 +371,8 @@ const FIELDS = [
   {
     key: 'disabilityIncomePct', group: 'monteCarlo', label: 'Income retained if disabled', type: 'pct',
     def: 0, personal: true,
+    activeWhen: cfg => cfg.values.disabilityProb > 0,
+    inactiveNote: 'the annual probability of disability is zero',
     help: 'Zero is the harshest assumption. Raise it if you hold long-term disability coverage — and check what fraction of income your actual policy replaces.',
   },
   {
@@ -352,6 +383,8 @@ const FIELDS = [
   {
     key: 'minGoalPct', group: 'monteCarlo', label: 'Discretionary goal floor', type: 'pct',
     def: 0, personal: true,
+    activeWhen: cfg => (cfg.goals || []).some(g => g.discretionary && g.bucket !== 'earmarked'),
+    inactiveNote: 'no goal is flagged discretionary, so there is nothing to cut',
     help: 'How much of a goal flagged discretionary must still be funded under stress. Zero means a discretionary goal can be abandoned entirely. Goals not flagged discretionary are always funded in full.',
   },
   {
@@ -362,11 +395,15 @@ const FIELDS = [
   {
     key: 'recessionReturnThreshold', group: 'monteCarlo', label: 'Return that counts as a bad market year', type: 'pct',
     def: -0.10, personal: false,
+    activeWhen: cfg => cfg.values.coupleCareerToMarket,
+    inactiveNote: 'career risk is not coupled to markets',
     help: 'Only used when coupling is on.',
   },
   {
     key: 'recessionJobLossMultiplier', group: 'monteCarlo', label: 'Job-loss multiplier in bad years', type: 'int',
     def: 3, personal: false,
+    activeWhen: cfg => cfg.values.coupleCareerToMarket,
+    inactiveNote: 'career risk is not coupled to markets',
     help: 'Only used when coupling is on. A rough stand-in for the real correlation, not a calibrated estimate.',
   },
   {
@@ -377,21 +414,29 @@ const FIELDS = [
   {
     key: 'ltcStartAge', group: 'monteCarlo', label: 'Earliest age of long-term care', type: 'age',
     def: 80, personal: false,
+    activeWhen: cfg => cfg.values.ltcEnabled,
+    inactiveNote: 'long-term care is not being modeled as an event',
     help: 'Below this age the event cannot occur.',
   },
   {
     key: 'ltcAnnualProb', group: 'monteCarlo', label: 'Annual probability of entering care', type: 'pct',
     def: 0.04, personal: true, research: true,
+    activeWhen: cfg => cfg.values.ltcEnabled,
+    inactiveNote: 'long-term care is not being modeled as an event',
     help: 'Per-year chance of entering care once past the age above. Worth checking against published incidence data for your age and sex rather than accepting this placeholder.',
   },
   {
     key: 'ltcDurationYears', group: 'monteCarlo', label: 'Years of care', type: 'int',
     def: 3, personal: true, research: true,
+    activeWhen: cfg => cfg.values.ltcEnabled,
+    inactiveNote: 'long-term care is not being modeled as an event',
     help: 'Average duration is a poor summary of a very skewed distribution — a long stay is what actually breaks a plan.',
   },
   {
     key: 'ltcAnnualCost0', group: 'monteCarlo', label: 'Annual cost of care', type: 'money',
     def: 120000, personal: true, research: true,
+    activeWhen: cfg => cfg.values.ltcEnabled,
+    inactiveNote: 'long-term care is not being modeled as an event',
     help: 'Today\'s dollars, net of anything you expect insurance to cover. Costs vary widely by care level and location, and have historically risen faster than general inflation.',
   },
 ];
