@@ -12,8 +12,9 @@ const STYLE_SOURCES = [
 ];
 
 const SOURCES_PER_RUN = 5;
-const IDEAS_CACHE_KEY = 'lookbook-ideas-cache';
+const IDEAS_CACHE_KEY = 'lookbook-ideas-cache-v2';
 const IDEAS_CACHE_MS = 12 * 60 * 60 * 1000;
+const POSTS_PER_IDEA = 3;
 
 // ── Vocabulary ─────────────────────────────────────────────────────────────
 // A garment is only recognised if it is on this list, which keeps ideas to
@@ -80,13 +81,16 @@ async function readStyleSource(source) {
 }
 
 // Slugs such as "navy-blue-hopsack-sport-coat-with-white-linen-pants" describe
-// whole outfits, so URLs are turned back into words rather than discarded.
+// whole outfits, so URLs are turned back into words rather than discarded. Each
+// separator becomes exactly one space so that positions in the readable text
+// still line up with positions in the original markdown.
 function readableText(markdown) {
-  return String(markdown ?? '').replace(/https?:\/\/\S+/g, match => match.replace(/[-_/]+/g, ' '));
+  return String(markdown ?? '').replace(/https?:\/\/\S+/g, match => match.replace(/[-_/]/g, ' '));
 }
 
 function extractGarmentIdeas(markdown, source) {
   const text = readableText(markdown);
+  const posts = extractPosts(markdown, source);
   const ideas = new Map();
 
   for (const match of text.matchAll(IDEA_PATTERN)) {
@@ -100,14 +104,133 @@ function extractGarmentIdeas(markdown, source) {
     const key = `${material} ${garment}`.trim();
 
     const idea = ideas.get(key) || {
-      garment, category, material, mentions: 0, colours: new Set(), source: source.name, sourceUrl: source.url,
+      garment, category, material, mentions: 0, colours: new Set(), posts: new Map(),
+      source: source.name, sourceUrl: source.url,
     };
     idea.mentions++;
     if (colour && wardrobeColor(colour)) idea.colours.add(colour);
+
+    // Remember which post this mention came from, so the suggestion can show
+    // the writing and the photograph that prompted it.
+    const post = postAround(posts, match.index);
+    if (post && !idea.posts.has(post.url)) idea.posts.set(post.url, post);
+
     ideas.set(key, idea);
   }
 
-  return [...ideas.values()].map(idea => ({ ...idea, colours: [...idea.colours] }));
+  return [...ideas.values()].map(idea => ({
+    ...idea,
+    colours: [...idea.colours],
+    posts: [...idea.posts.values()].slice(0, POSTS_PER_IDEA),
+  }));
+}
+
+// ── Finding the posts behind a mention ─────────────────────────────────────
+const MARKDOWN_LINK = /\[\s*(?:!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\))?\s*([^\]]*?)\s*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
+const NAV_PATH = /\/(?:category|categories|tag|tags|author|page|section|about|contact|subscribe|newsletter|privacy|terms|search|feed|login|account|cart|offers?)(?:\/|$)/i;
+const IMAGE_FILE = /\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)/i;
+const DECORATIVE_IMAGE = /icon|logo|arrow|sprite|placeholder|avatar|spacer|\.svg/i;
+const NOT_A_HEADLINE = /skip to|subscribe|sign in|sign up|newsletter|advertis|read more|shop now|</i;
+const POST_WINDOW = 900;
+
+function extractPosts(markdown, source) {
+  const text = String(markdown ?? '');
+  const host = hostnameOf(source.url);
+  const images = [...text.matchAll(MARKDOWN_IMAGE)].map(match => ({ index: match.index, url: match[1] }));
+  const posts = [];
+  const byUrl = new Map();
+
+  for (const match of text.matchAll(MARKDOWN_LINK)) {
+    const [, imageAlt, imageUrl, linkText, url] = match;
+    const title = cleanHeadline(linkText) || cleanHeadline(imageAlt);
+    if (!isPostLink(url, title, host, source.url)) continue;
+
+    const existing = byUrl.get(url);
+    if (existing) {
+      if (title.length > existing.title.length) existing.title = title;
+      continue;
+    }
+
+    const post = {
+      title: title.slice(0, 110),
+      url,
+      image: usableImage(imageUrl) || usableImage(precedingImage(images, match.index)),
+      source: source.name,
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+    byUrl.set(url, post);
+    posts.push(post);
+  }
+
+  return posts;
+}
+
+function isPostLink(url, title, host, indexUrl) {
+  if (!url || !title) return false;
+  // Two words is a section name — "celebrity outfits" — not a headline.
+  if (title.length < 15 || title.split(/\s+/).length < 3 || NOT_A_HEADLINE.test(title)) return false;
+  if (hostnameOf(url) !== host) return false;
+  if (url.replace(/\/$/, '') === String(indexUrl).replace(/\/$/, '')) return false;
+  if (NAV_PATH.test(url) || IMAGE_FILE.test(url)) return false;
+  return slugWords(pathOf(url)) >= 3;
+}
+
+function cleanHeadline(text) {
+  return String(text ?? '')
+    .replace(/^(?:#+\s*|about\s+)/i, '')
+    .replace(/^Image\s+\d+:\s*/i, '')
+    .replace(/[*_`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function usableImage(url) {
+  return url && !DECORATIVE_IMAGE.test(url) ? url : '';
+}
+
+function precedingImage(images, index) {
+  let found = '';
+  for (const image of images) {
+    if (image.index > index) break;
+    found = image.url;
+  }
+  return found;
+}
+
+// A garment named inside a headline sits within that link; one named in the
+// surrounding prose belongs to the nearest post above it.
+function postAround(posts, index) {
+  const containing = posts.find(post => index >= post.start && index <= post.end);
+  if (containing) return containing;
+
+  let nearest = null;
+  let shortest = POST_WINDOW;
+  for (const post of posts) {
+    const distance = Math.abs((post.start + post.end) / 2 - index);
+    if (distance < shortest) {
+      shortest = distance;
+      nearest = post;
+    }
+  }
+  return nearest;
+}
+
+function hostnameOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function pathOf(url) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return '';
+  }
 }
 
 async function gatherStyleIdeas({ onProgress = () => {} } = {}) {
@@ -144,12 +267,16 @@ function mergeIdeas(ideas) {
     const key = `${idea.material} ${idea.garment}`.trim();
     const running = merged.get(key);
     if (!running) {
-      merged.set(key, { ...idea, sources: [idea.source] });
+      merged.set(key, { ...idea, sources: [idea.source], posts: (idea.posts || []).slice() });
       continue;
     }
     running.mentions += idea.mentions;
     running.colours = [...new Set([...running.colours, ...idea.colours])];
     if (!running.sources.includes(idea.source)) running.sources.push(idea.source);
+
+    const seen = new Set(running.posts.map(post => post.url));
+    running.posts = [...running.posts, ...(idea.posts || []).filter(post => !seen.has(post.url))]
+      .slice(0, POSTS_PER_IDEA);
   }
   return [...merged.values()].sort((a, b) => b.mentions - a.mentions);
 }
@@ -308,6 +435,7 @@ function buildOutfitIdeas({ ideas, sources, palette, accents, preferences = '', 
       why: explainOutfit(pieces, topColour, { palette, accents }),
       sources: [...new Set([...top.sources, ...bottom.sources])],
       sourceLinks: sources.filter(source => [...top.sources, ...bottom.sources].includes(source.name)),
+      inspiration: inspirationFor(pieces),
       colours: [topColour.colour, bottomColour],
     });
   }
@@ -368,6 +496,44 @@ function pickBottomColour(idea, topColour, { palette, accents, avoid = [], taken
   // Spread the suggestions out rather than putting the same trousers under
   // every top, but repeat sooner than return nothing.
   return candidates.find(colour => !taken.includes(colour)) || candidates[0] || '';
+}
+
+// The posts a suggestion actually came out of, so it can be looked at rather
+// than taken on trust. Ones with a photograph go first: they show the idea.
+const INSPIRATION_PER_OUTFIT = 3;
+
+function inspirationFor(pieces) {
+  const posts = [];
+  const seen = new Set();
+  for (const piece of pieces) {
+    for (const post of piece.posts || []) {
+      if (seen.has(post.url)) continue;
+      seen.add(post.url);
+      posts.push({
+        title: post.title,
+        url: post.url,
+        image: post.image,
+        source: post.source,
+        garment: piece.garment,
+        // A post found next to a mention is worth less than one that names the
+        // garment itself, which is a post genuinely about this idea.
+        aboutIt: mentionsGarment(post, piece.garment),
+      });
+    }
+  }
+
+  const ranked = posts.sort((a, b) =>
+    Number(b.aboutIt) - Number(a.aboutIt) || Number(Boolean(b.image)) - Number(Boolean(a.image)));
+
+  const onTopic = ranked.filter(post => post.aboutIt);
+  return (onTopic.length ? onTopic : ranked).slice(0, INSPIRATION_PER_OUTFIT);
+}
+
+function mentionsGarment(post, garment) {
+  const haystack = `${post.title} ${post.url}`.toLowerCase().replace(/[-_/]/g, ' ');
+  // "camp collar shirt" is worth matching on its head noun too.
+  const headNoun = garment.split(' ').pop();
+  return haystack.includes(garment) || haystack.includes(headNoun);
 }
 
 function outfitTitle(pieces) {

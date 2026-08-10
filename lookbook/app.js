@@ -731,6 +731,31 @@ function readWhen(timestamp) {
     : `on ${date.toLocaleDateString()}`;
 }
 
+// The posts the suggestion came out of, shown with their own photograph so the
+// idea can be looked at rather than imagined from a description.
+function renderInspiration(posts = []) {
+  if (!posts.length) return '';
+
+  return `
+    <div class="idea-source">
+      <span class="idea-source-label">Seen in</span>
+      <div class="source-cards">
+        ${posts.map(post => `
+          <a class="source-card" href="${esc(post.url)}" target="_blank" rel="noopener"
+             title="${esc(post.title)} — ${esc(post.source)}">
+            ${post.image ? `
+              <img class="source-thumb" src="${esc(post.image)}" alt="" loading="lazy" referrerpolicy="no-referrer"
+                   onerror="this.remove()">` : ''}
+            <span class="source-text">
+              <span class="source-title">${esc(post.title)}</span>
+              <span class="source-name">${esc(post.source)}</span>
+            </span>
+          </a>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
 function renderOutfitCard(outfit) {
   return `
     <article class="idea-card" data-id="${esc(outfit.id)}">
@@ -741,6 +766,7 @@ function renderOutfitCard(outfit) {
         <h3 class="idea-title">${esc(outfit.title)}</h3>
         <p class="idea-why">${esc(outfit.why)}</p>
         <p class="idea-pieces">${outfit.pieces.map(piece => `<span class="idea-piece">${esc(piece.label)}</span>`).join('')}</p>
+        ${renderInspiration(outfit.inspiration)}
         <div class="idea-actions">
           <button class="btn-primary btn-sm" data-build="${esc(outfit.id)}">Build this look</button>
           <span class="idea-progress"></span>
