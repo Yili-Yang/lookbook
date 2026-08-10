@@ -271,7 +271,12 @@ function setBusy(slot, busy) {
 }
 
 // ── Fetching product photos ────────────────────────────────────────────────
-async function triggerFetch(slot) {
+function triggerFetch(slot) {
+  slot.slotState.fetching = runFetch(slot);
+  return slot.slotState.fetching;
+}
+
+async function runFetch(slot) {
   const state = slot.slotState;
   const urlInput = slot.querySelector('.slot-url');
   const url = urlInput.value.trim();
@@ -502,21 +507,33 @@ function updateSaveButton() {
   document.getElementById('btn-save').disabled = !(title && slotElements().some(slotHasImage));
 }
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, ms)));
+
 // Saving a moment after picking a photo used to store only the shop's link,
-// because the copy was still downloading. Give it a moment to land first.
+// because the copy was still downloading — and a look built from an idea could
+// be saved while its pages were still being read.
 async function waitForPendingCaptures() {
-  const pending = slotElements().map(slot => slot.slotState?.pending).filter(Boolean);
-  if (!pending.length) return;
+  const outstanding = () => slotElements()
+    .flatMap(slot => [slot.slotState?.fetching, slot.slotState?.pending])
+    .filter(Boolean);
+  if (!outstanding().length) return;
 
   const button = document.getElementById('btn-save');
   const label = button.textContent;
   button.disabled = true;
-  button.textContent = 'Saving photos…';
+  button.textContent = 'Finishing…';
+  const deadline = Date.now() + SAVE_WAIT_MS;
+
   try {
-    await Promise.race([
-      Promise.allSettled(pending),
-      new Promise(resolve => setTimeout(resolve, CAPTURE_WAIT_MS)),
-    ]);
+    // Reading a page starts a photo downloading, so waiting once is not enough:
+    // keep going until a round produces no work that has not been waited on.
+    const waited = new Set();
+    while (Date.now() < deadline) {
+      const work = outstanding().filter(promise => !waited.has(promise));
+      if (!work.length) break;
+      work.forEach(promise => waited.add(promise));
+      await Promise.race([Promise.allSettled(work), delay(deadline - Date.now())]);
+    }
   } finally {
     button.textContent = label;
     button.disabled = false;
@@ -538,9 +555,10 @@ function collectPieces() {
   });
 }
 
-// Comfortably longer than image.js allows a download to take, so the wait ends
-// because the copy arrived or definitively failed, not because it timed out.
-const CAPTURE_WAIT_MS = 26000;
+// Comfortably longer than reading a page and downloading its photo take, so the
+// wait ends because the work finished or definitively failed, not because it
+// ran out of time.
+const SAVE_WAIT_MS = 40000;
 
 async function saveNewLook() {
   await waitForPendingCaptures();

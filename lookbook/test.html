@@ -376,8 +376,18 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer, over ol
      scoreProductUrl('https://www.target.com/s/ecru+linen+shirt', words),
      // A path that is only the words searched for is a department, not an item.
      scoreProductUrl('https://www.zappos.com/ecru-linen-shirt', words),
-     scoreProductUrl('https://www.revolve.com/v/ecru-linen-shirt', words)],
-    [0, 0, 0, 0, 0, 0, 0, 0]);
+     scoreProductUrl('https://www.revolve.com/v/ecru-linen-shirt', words),
+     // A /products/ path can still be a department.
+     scoreProductUrl('https://www2.hm.com/en_us/women/products/shirts/linen.html', words)],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert('a short slug under a product path is still a product',
+    scoreProductUrl('https://greenfieldclothiers.com/products/ecru-linen-shirt', words) > 0, true);
+  assert('woocommerce category pages are rejected',
+    scoreProductUrl('https://military-outfitters.com/product-category/navy-linen-shirts', words), 0);
+  // Otherwise "navy denim shirt" finds shirts belonging to the navy.
+  assert('colour names are disambiguated for searching',
+    [unambiguous('navy denim shirt'), unambiguous('ecru linen shirt')],
+    ['navy blue denim shirt', 'ecru linen shirt']);
   assert('a product page about something else is rejected',
     scoreProductUrl('https://shop.example.com/products/wool-overcoat', words), 0);
   assert('marketplace listings lose to a brand\'s own shop',

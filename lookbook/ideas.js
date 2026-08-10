@@ -280,6 +280,7 @@ function buildOutfitIdeas({ ideas, sources, palette, accents, preferences = '', 
   const outfits = [];
   const usedGarments = new Set();
   const usedColours = [];
+  const usedBottomColours = [];
 
   for (const top of tops) {
     if (outfits.length >= limit) break;
@@ -293,7 +294,8 @@ function buildOutfitIdeas({ ideas, sources, palette, accents, preferences = '', 
       pickBottomColour(candidate, topColour.colour, { palette, accents, avoid }));
     if (!bottom) continue;
 
-    const bottomColour = pickBottomColour(bottom, topColour.colour, { palette, accents, avoid });
+    const bottomColour = pickBottomColour(bottom, topColour.colour, { palette, accents, avoid, taken: usedBottomColours });
+    usedBottomColours.push(bottomColour);
     usedGarments.add(top.garment);
     usedGarments.add(bottom.garment);
 
@@ -355,14 +357,17 @@ function orderBottoms(bottoms, preferences) {
   ];
 }
 
-function pickBottomColour(idea, topColour, { palette, accents, avoid = [] }) {
+function pickBottomColour(idea, topColour, { palette, accents, avoid = [], taken = [] }) {
   const candidates = [
     ...idea.colours.filter(colour => colorsGoTogether(colour, topColour)),
     ...palette.filter(colour => colorsGoTogether(colour, topColour)),
     ...accents.filter(colour => colorsGoTogether(colour, topColour)),
     ...(wardrobeColor(topColour)?.goesWith || []),
-  ];
-  return candidates.find(colour => colour && colour !== topColour && !avoid.includes(colour)) || '';
+  ].filter(colour => colour && colour !== topColour && !avoid.includes(colour));
+
+  // Spread the suggestions out rather than putting the same trousers under
+  // every top, but repeat sooner than return nothing.
+  return candidates.find(colour => !taken.includes(colour)) || candidates[0] || '';
 }
 
 function outfitTitle(pieces) {
@@ -411,6 +416,7 @@ const SEARCH_ENDPOINTS = [
 // query goes wrong.
 const NOT_A_PRODUCT = new RegExp([
   '/search', '/s/', '/s\\?', '/sch/', '/browse/', '/market/', '/category/', '/categories/',
+  '/product-category/', '/product-tag/', '/collection/', '/dept/', '/departments/',
   '/collections/[^/]+/?$', '/c/', '/buy/', '/shop/?$', '/shop/(?!product)',
   '_normal|[?&](?:filter|facet|refine)', 'pinterest\\.', 'reddit\\.', 'youtube\\.', 'facebook\\.',
   'instagram\\.', 'tiktok\\.', 'wikipedia\\.', 'quora\\.', 'substack\\.', 'blogspot\\.',
@@ -419,10 +425,20 @@ const NOT_A_PRODUCT = new RegExp([
 const SEARCH_QUERY = /[?&](?:q|k|s|query|keyword|search|_nkw|srsltid)=/i;
 const LOOKS_LIKE_PRODUCT = /\/(?:products?|p|dp|itm|item|pd)\/|\/product-|-p\d{4,}|\/p\d{4,}/i;
 
+// Wardrobe colour names double as other things — navy is a branch of the armed
+// forces, olive is a fruit — and searching for the fuller name avoids a shirt
+// that is navy only in the naval sense.
+const SEARCH_SYNONYMS = { navy: 'navy blue', olive: 'olive green', sage: 'sage green', mustard: 'mustard yellow' };
+
+function unambiguous(query) {
+  return String(query).replace(/^\s*([a-z]+)/i, (match, first) => SEARCH_SYNONYMS[first.toLowerCase()] || match);
+}
+
 async function searchProductUrl(query, { onProgress = () => {} } = {}) {
-  const candidates = await searchResults(`${query} buy`, { onProgress });
+  const candidates = await searchResults(`${unambiguous(query)} buy`, { onProgress });
   if (!candidates.length) return null;
 
+  // Scored against what was asked for, not the expanded phrasing.
   const words = String(query).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 2);
   const scored = candidates
     .map(url => ({ url, score: scoreProductUrl(url, words) }))
@@ -470,10 +486,9 @@ function extractSearchResultUrls(body) {
 // is only the words searched for — /navy-tank-top — is a department.
 const PRODUCT_ID = /\/[a-z0-9-]*\d{4,}|\/[a-z]*\d+[a-z]+\d*(?:\.html?)?$|-\d{5,}/i;
 
-function namesOneProduct(path) {
+function slugWords(path) {
   const lastSegment = path.replace(/\/$/, '').split('/').pop() || '';
-  const words = lastSegment.replace(/\.html?$/i, '').split('-').filter(Boolean);
-  return words.length >= 4;
+  return lastSegment.replace(/\.html?$/i, '').split('-').filter(Boolean).length;
 }
 
 function scoreProductUrl(url, words) {
@@ -488,13 +503,18 @@ function scoreProductUrl(url, words) {
   const path = new URL(url).pathname;
   const marked = LOOKS_LIKE_PRODUCT.test(url);
   const identified = PRODUCT_ID.test(path);
-  const descriptive = namesOneProduct(path);
-  if (!marked && !identified && !descriptive) return 0;
+  const slugLength = slugWords(path);
+  // /products/pants/linen.html is a department despite the /products/ in it,
+  // and /navy-tank-top is one despite reading like a garment. What identifies a
+  // single item is an id, a long descriptive slug, or a product path with a
+  // slug that still names something.
+  const descriptive = slugLength >= 4 || (marked && slugLength >= 3);
+  if (!identified && !descriptive) return 0;
 
   // Marketplace listings match almost any words and are rarely the piece a
   // style writer had in mind, so a brand's own shop wins a tie.
   const marketplace = MARKETPLACE.test(url) ? 8 : 0;
-  return matches * 4 + (marked ? 10 : 0) + (identified ? 6 : 0) + (descriptive ? 4 : 0) - marketplace;
+  return matches * 4 + (marked ? 10 : 0) + (identified ? 6 : 0) + slugLength - marketplace;
 }
 
 const MARKETPLACE = /(?:amazon\.|ebay\.|walmart\.|aliexpress\.|temu\.|wish\.com|etsy\.|alibaba\.|dhgate\.)/i;
