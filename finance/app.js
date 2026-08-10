@@ -146,6 +146,7 @@ function renderDerived() {
   renderTodos();
   renderScenarios();
   syncFieldInputs();
+  refreshGroupCounts();
   refreshRowSummaries();
 }
 
@@ -750,6 +751,23 @@ function suggestRmdAge() {
     row.querySelector('.field-main').appendChild(hint);
   }
   hint.textContent = `Current law suggests ${suggested} for someone born in ${state.cfg.values.birthYear} — use it?`;
+}
+
+// Each group header carries a count of how many placeholders are left inside
+// it. That header lives in markup only rebuilt when the shape of the plan
+// changes, so the count has to be refreshed on its own: marking a field as your
+// own clears its row immediately, and a header above it still insisting on the
+// old number reads as the app having ignored the click. Refreshed in place
+// rather than re-rendered, so open sections stay open.
+function refreshGroupCounts() {
+  for (const group of document.querySelectorAll('#field-groups .group')) {
+    const pill = group.querySelector('summary .pill');
+    if (!pill) continue;
+    const pending = FIELDS.filter(f =>
+      f.group === group.dataset.group && isPlaceholder(state.cfg, f.key)).length;
+    pill.className = `pill ${pending ? 'placeholder' : 'verified'}`;
+    pill.textContent = pending ? `${pending} to replace` : 'done';
+  }
 }
 
 // Levers and imports change values behind the field inputs' backs, so the
