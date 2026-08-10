@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Lookbook</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a17'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-style='italic' font-size='20' fill='%23f5f1ea' text-anchor='middle'%3EL%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -39,6 +40,7 @@
           <label for="look-title">Look title</label>
           <input type="text" id="look-title" placeholder="e.g. Navy linen weekend" autocomplete="off">
         </div>
+        <p class="modal-hint">Paste a product page link and pick the photo you want. Each photo is copied into your lookbook, so it keeps working even if the shop's link stops.</p>
         <div id="pieces-container"></div>
         <button class="btn-ghost btn-sm" id="btn-add-piece">+ Add piece</button>
         <div class="form-field" style="margin-top:16px">
@@ -61,10 +63,12 @@
       <button class="btn-icon" id="drawer-close" aria-label="Close">✕</button>
     </div>
     <textarea id="prefs-text" placeholder="Write anything — fits you like, colors, brands, what to avoid, wardrobe gaps..."></textarea>
+    <p class="drawer-foot" id="storage-meter"></p>
   </aside>
 
   <script src="store.js"></script>
   <script src="fetch.js"></script>
+  <script src="image.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

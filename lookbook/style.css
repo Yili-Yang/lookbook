@@ -307,13 +307,15 @@ main {
   height: 44px;
   flex-shrink: 0;
   border-radius: 3px;
-  background: var(--bg-soft);
+  background: var(--bg-card);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.piece-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* Contain, not cover: a cropped square of a full-length product shot is
+   usually a patch of background. */
+.piece-thumb img { width: 100%; height: 100%; object-fit: contain; }
 
 .piece-info { flex: 1; min-width: 0; }
 
@@ -510,20 +512,39 @@ main {
 }
 .slot-url-row input:focus { outline: none; border-color: var(--ink); }
 
+.piece-slot.dragging {
+  border-color: var(--ink);
+  background: var(--bg-soft);
+}
+
 .slot-preview {
   display: flex;
   gap: 12px;
   align-items: flex-start;
 }
 
-.slot-img {
-  width: 72px;
-  height: 72px;
-  border-radius: 3px;
-  object-fit: cover;
-  background: var(--bg-soft);
-  border: 1px solid var(--line);
+.slot-img-wrap {
+  width: 84px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slot-img {
+  width: 84px;
+  height: 84px;
+  border-radius: 3px;
+  object-fit: contain;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+}
+
+.slot-img-tag {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--ink-faint);
+  text-align: center;
 }
 
 .slot-fields {
@@ -553,23 +574,97 @@ main {
   align-items: center;
   gap: 6px;
 }
-.slot-status.error { color: #c0392b; }
+.slot-status.error { color: #c0392b; font-style: normal; }
+.slot-status.busy { color: var(--ink-soft); }
 
-.slot-fallback input {
+/* ── Photo picker ── */
+.slot-picker { display: flex; flex-direction: column; gap: 8px; }
+
+.slot-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.slot-picker-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.slot-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+}
+
+.thumb {
+  aspect-ratio: 1;
+  padding: 3px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.thumb:hover { border-color: var(--ink-soft); }
+.thumb.selected { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.btn-link:hover { color: var(--ink); }
+
+/* ── Manual photo entry ── */
+.slot-manual { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.slot-manual-body { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+
+.slot-image-url {
   font-family: var(--sans);
   font-size: 12px;
-  padding: 6px 8px;
+  padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 3px;
   background: var(--bg-card);
   color: var(--ink);
   width: 100%;
 }
-.slot-fallback input:focus { outline: none; border-color: var(--ink); }
-.slot-fallback-label {
+.slot-image-url:focus { outline: none; border-color: var(--ink); }
+
+.file-drop {
+  display: block;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  background: var(--bg-card);
   font-size: 11px;
+  line-height: 1.5;
   color: var(--ink-soft);
-  margin-bottom: 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.file-drop:hover { border-color: var(--ink-soft); color: var(--ink); }
+.file-drop strong { font-weight: 500; color: var(--ink); }
+
+.modal-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin-top: -6px;
 }
 
 /* ── Spinner ── */
@@ -641,6 +736,15 @@ main {
 }
 #prefs-text::placeholder { color: var(--ink-faint); }
 #prefs-text:focus { outline: none; }
+
+.drawer-foot {
+  flex-shrink: 0;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.drawer-foot.warning { color: #c0392b; }
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
