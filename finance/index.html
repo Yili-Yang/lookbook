@@ -186,10 +186,15 @@
         <div class="card-head">
           <div>
             <h2>Simulation settings</h2>
-            <p class="card-blurb">How the paths are generated, and which risks are switched on. The optional ones are off by default because each is a real judgment call about how much realism is worth the added complexity.</p>
+            <p class="card-blurb">How the paths are generated, and which risks are switched on. The optional ones are off by default because each is a real judgment call about how much realism is worth the added complexity. Everything here re-runs the simulation as you change it; settings that depend on a switch that is currently off say so, since editing one of those changes nothing at all.</p>
+          </div>
+          <div class="button-row">
+            <span class="run-status" id="run-status"></span>
+            <button class="btn-solid btn-sm" id="btn-new-draw">Run a new draw</button>
           </div>
         </div>
         <div id="risk-fields"></div>
+        <p class="footnote">The same inputs and the same seed always produce the same paths, so a plain recalculation would return an identical answer by design — that reproducibility is what makes a change in the output attributable to a change you made. "Run a new draw" advances the seed instead, which is how you check whether a conclusion holds up or was an artifact of one particular set of dice.</p>
       </div>
     </section>
 

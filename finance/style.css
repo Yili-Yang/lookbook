@@ -314,6 +314,16 @@ textarea { resize: vertical; line-height: 1.6; }
 .field-source { width: 190px; font-size: 12.5px; padding: 5px 8px; }
 .field.is-placeholder { background: linear-gradient(90deg, var(--warn-bg), transparent 60%); }
 
+/* A field whose value currently feeds nothing. Still editable, since it matters
+   the moment its switch goes on, but visibly set aside — and not also shouting
+   about being a placeholder, which is not the urgent thing about it. */
+.field.is-inactive .field-name label, .field.is-inactive .field-help { color: var(--ink-faint); }
+.field.is-inactive .field-input { opacity: 0.55; }
+.field.is-inactive.is-placeholder { background: none; }
+.field-inactive { font-size: 12.5px; color: var(--warn); margin-top: 5px; max-width: 74ch; }
+
+.run-status { font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
 .pill {
   font-size: 10.5px;
   text-transform: uppercase;
