@@ -261,6 +261,31 @@ test('after-tax net worth discounts pre-tax balances and embedded gains', () => 
   assert(row.netWorthAfterTax < row.netWorth, 'the after-tax figure is the more honest one');
 });
 
+test('the after-tax bucket values are what the stacked chart stacks', () => {
+  // The balances chart stacks per-bucket after-tax values and draws a total
+  // line over them. If the parts stop summing to the whole, the chart lies
+  // about the total while still looking perfectly plausible.
+  const cfg = quietConfig({
+    startAge: 60, retireAge: 65, endAge: 75, inflation: 0.025,
+    equityReturn: 0.06, bondReturn: 0.04, cashReturn: 0.02,
+    cash0: 40000, bonds0: 30000, taxableMix0: 250000, pretax0: 300000,
+    roth0: 60000, earmarked0: 15000, reValue0: 400000, mortgage0: 150000,
+    mortAnnualPayment: 20000, mortRate: 0.04, retireSpend: 70000,
+    pretaxTaxRate: 0.3, taxableGainPct: 0.5, ltcgFederal: 0.2, stateLocalGains: 0.03,
+    livingExpenseMode: 'explicit', livingExpenseExplicit: 70000,
+  });
+  cfg.incomes = [{ id: 'i', name: 'Salary', amount: 120000, basis: 'net', growth: 0, startYear: null, endYear: null }];
+  for (const row of runDeterministic(cfg).rows) {
+    const stacked = row.cash + row.bonds + row.taxableAfterTax + row.pretaxAfterTax
+      + row.roth + row.earmarked + row.houseEquity;
+    assertClose(stacked, row.netWorthAfterTax, 0.01, `stacked buckets in ${row.year}`);
+    assertClose(row.liquidAfterTaxReal, (row.netWorthAfterTax - row.houseEquity) / row.deflator,
+      0.01, `liquid after-tax basis in ${row.year}`);
+    assert(row.pretaxAfterTax <= row.pretax + 1e-9, 'pre-tax is discounted, never inflated');
+    assert(row.taxableAfterTax <= row.taxable + 1e-9, 'taxable is net of embedded gains');
+  }
+});
+
 // ── Monte Carlo ─────────────────────────────────────────────────────────────
 
 test('the same seed reproduces the same paths, a different seed does not', () => {

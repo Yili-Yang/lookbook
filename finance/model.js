@@ -247,11 +247,24 @@ function drawDown(state, need, pretaxTaxRate) {
   return out;
 }
 
-function afterTaxNetWorth(state, cfg, d, houseEquity) {
+// A bucket's after-tax value is what you would keep if you liquidated it: the
+// taxable account net of the gains embedded in it, the pre-tax account net of
+// the ordinary-income rate. Charts stack these rather than the raw balances, so
+// the discount lives here once instead of being restated by every caller.
+function afterTaxParts(state, cfg, d) {
   const v = cfg.values;
   const embeddedGainsTax = Math.max(0, state.taxable) * v.taxableGainPct * d.ltcgRate;
-  return state.cash + state.bonds + (state.taxable - embeddedGainsTax)
-    + state.pretax * (1 - v.pretaxTaxRate) + state.roth + state.earmarked + houseEquity;
+  return {
+    taxable: state.taxable - embeddedGainsTax,
+    pretax: state.pretax * (1 - v.pretaxTaxRate),
+    embeddedGainsTax,
+  };
+}
+
+function afterTaxNetWorth(state, cfg, d, houseEquity) {
+  const parts = afterTaxParts(state, cfg, d);
+  return state.cash + state.bonds + parts.taxable
+    + parts.pretax + state.roth + state.earmarked + houseEquity;
 }
 
 // ── Deterministic ledger ────────────────────────────────────────────────────
@@ -362,6 +375,7 @@ function runDeterministic(cfg) {
 
     const liquid = state.cash + state.bonds + state.taxable + state.pretax + state.roth + state.earmarked;
     const netWorth = liquid + houseEquity;
+    const parts = afterTaxParts(state, cfg, d);
     const netWorthAfterTax = afterTaxNetWorth(state, cfg, d, houseEquity);
 
     rows.push({
@@ -376,9 +390,13 @@ function runDeterministic(cfg) {
       rmdRequired, rmdForced,
       cash: state.cash, bonds: state.bonds, taxable: state.taxable,
       pretax: state.pretax, roth: state.roth, earmarked: state.earmarked,
+      taxableAfterTax: parts.taxable, pretaxAfterTax: parts.pretax,
       mortgage: mortBal, reValue, houseEquity,
       liquid, netWorth, netWorthAfterTax,
       netWorthAfterTaxReal: netWorthAfterTax / inf,
+      // The after-tax figure with property stripped out, which is the basis the
+      // Monte Carlo layer reports and so the only one its fan can be compared to.
+      liquidAfterTaxReal: (netWorthAfterTax - houseEquity) / inf,
       liquidReal: liquid / inf,
     });
   }
