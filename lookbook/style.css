@@ -307,13 +307,15 @@ main {
   height: 44px;
   flex-shrink: 0;
   border-radius: 3px;
-  background: var(--bg-soft);
+  background: var(--bg-card);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.piece-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* Contain, not cover: a cropped square of a full-length product shot is
+   usually a patch of background. */
+.piece-thumb img { width: 100%; height: 100%; object-fit: contain; }
 
 .piece-info { flex: 1; min-width: 0; }
 

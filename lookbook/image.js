@@ -164,8 +164,10 @@ function approximateBytes(dataUrl) {
   return Math.round(base64.length * 0.75);
 }
 
+// Non-breaking space: these sizes sit in narrow captions that would otherwise
+// wrap between the number and its unit.
 function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024) return `${bytes}\u00a0B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}\u00a0KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}\u00a0MB`;
 }
