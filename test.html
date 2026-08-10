@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance — model checks</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    main { max-width: 900px; }
+    .result { display: flex; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+    .result:first-child { border-top: none; }
+    .result .mark { font-family: var(--mono); font-size: 12px; }
+    .result.pass .mark { color: var(--good); }
+    .result.fail { color: var(--bad); }
+    .result .why { display: block; font-size: 13px; color: var(--bad); margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-title">
+      <p class="eyebrow">Model checks</p>
+      <h1>Does it still add up?</h1>
+      <p class="lede">Each check below exists because that specific mechanic is a known trap. They cover the arithmetic in <code>model.js</code> only — the interface is checked by using it.</p>
+    </div>
+  </header>
+  <main>
+    <div class="panel">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Results</h2>
+            <p class="card-blurb">The same checks run headlessly with <code>node run-tests.js</code>, which is the faster way to run them while editing.</p>
+          </div>
+          <button class="btn-solid btn-sm" id="rerun">Run again</button>
+        </div>
+        <div id="summary" class="metric-grid"></div>
+        <div id="results"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="format.js"></script>
+  <script src="config.js"></script>
+  <script src="model.js"></script>
+  <script src="tests.js"></script>
+  <script>
+    function run() {
+      const started = performance.now();
+      const results = runAllTests();
+      const elapsed = performance.now() - started;
+      const failed = results.filter(r => !r.pass).length;
+
+      document.getElementById('summary').innerHTML = `
+        <div class="metric">
+          <div class="metric-label">Passed</div>
+          <div class="metric-value good">${results.length - failed}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Failed</div>
+          <div class="metric-value${failed ? ' bad' : ''}">${failed}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Took</div>
+          <div class="metric-value">${elapsed.toFixed(0)}<span style="font-size:16px"> ms</span></div>
+        </div>`;
+
+      document.getElementById('results').innerHTML = results.map(r => `
+        <div class="result ${r.pass ? 'pass' : 'fail'}">
+          <span class="mark">${r.pass ? 'ok' : 'FAIL'}</span>
+          <span>${esc(r.name)}${r.pass ? '' : `<span class="why">${esc(r.error)}</span>`}</span>
+        </div>`).join('');
+    }
+    document.getElementById('rerun').addEventListener('click', run);
+    run();
+  </script>
+</body>
+</html>
