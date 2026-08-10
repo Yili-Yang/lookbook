@@ -84,7 +84,9 @@ async function fetchText(url, options = {}) {
   }
 }
 
-const ERROR_PAGE_TITLE = /^\s*(?:40[0-9]|50[0-9]|error|page not found|not found|access denied|forbidden|are you a robot|just a moment)\b/i;
+// Titles that mean a proxy handed back its own failure, the shop's error page,
+// or a bot check, none of which contain the product being asked for.
+const ERROR_PAGE_TITLE = /^\s*(?:40[0-9]|50[0-9]|error|page not found|not found|access denied|forbidden|are you a robot|just a moment|origin dns error|dns error|site not found|bad gateway|service unavailable|attention required|security check|captcha|robot check)\b/i;
 
 function looksLikeErrorPage(data) {
   return ERROR_PAGE_TITLE.test(data.name || '');

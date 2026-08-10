@@ -192,8 +192,9 @@
     'https://cdn.example.com/wool_runner_pdp.png');
 
   assert('shop error pages are recognised',
-    [looksLikeErrorPage({ name: '404 Not Found' }), looksLikeErrorPage({ name: 'Just a moment...' }), looksLikeErrorPage({ name: 'Linen Shirt' })],
-    [true, true, false]);
+    ['404 Not Found', 'Just a moment...', 'Origin DNS error', 'Attention Required!', 'Linen Shirt']
+      .map(name => looksLikeErrorPage({ name })),
+    [true, true, true, true, false]);
 
   // ── Reader (markdown) fallback ───────────────────────────────────────────
   const markdown = `Title: AIRism Cotton T-Shirt | UNIQLO US

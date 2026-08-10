@@ -286,7 +286,7 @@ async function triggerFetch(slot) {
     state.expanded = false;
     setStatus(slot, '');
     renderThumbs(slot);
-    selectCandidate(slot, verified[0].url);
+    startCapture(slot, verified[0].url);
   } catch (err) {
     if (state.fetchToken !== token) return;
     setStatus(slot, fetchErrorMessage(err), 'error');
@@ -330,7 +330,7 @@ function renderThumbs(slot) {
   `).join('');
 
   grid.querySelectorAll('.thumb').forEach(button => {
-    button.addEventListener('click', () => selectCandidate(slot, button.dataset.url));
+    button.addEventListener('click', () => startCapture(slot, button.dataset.url));
   });
 
   const moreBtn = slot.querySelector('[data-action="toggle-more"]');
@@ -346,6 +346,13 @@ function renderThumbs(slot) {
 function toggleMoreThumbs(slot) {
   slot.slotState.expanded = !slot.slotState.expanded;
   renderThumbs(slot);
+}
+
+// The download runs in the background so the picker stays responsive, but the
+// promise is kept so saving can wait for a copy that is still on its way.
+function startCapture(slot, url) {
+  slot.slotState.pending = selectCandidate(slot, url);
+  return slot.slotState.pending;
 }
 
 // Shows the chosen photo straight away, then quietly saves a copy so the look
@@ -412,10 +419,15 @@ async function useManualImageUrl(slot, value, { reveal = false } = {}) {
   setStatus(slot, '');
   state.candidates = [];
   renderThumbs(slot);
-  selectCandidate(slot, url);
+  startCapture(slot, url);
 }
 
-async function useLocalFile(slot, file) {
+function useLocalFile(slot, file) {
+  slot.slotState.pending = storeLocalFile(slot, file);
+  return slot.slotState.pending;
+}
+
+async function storeLocalFile(slot, file) {
   const state = slot.slotState;
   const token = ++state.imageToken;
   setStatus(slot, `<span class="spinner"></span> Adding your photo…`, 'busy');
@@ -465,6 +477,27 @@ function updateSaveButton() {
   document.getElementById('btn-save').disabled = !(title && slotElements().some(slotHasImage));
 }
 
+// Saving a moment after picking a photo used to store only the shop's link,
+// because the copy was still downloading. Give it a moment to land first.
+async function waitForPendingCaptures() {
+  const pending = slotElements().map(slot => slot.slotState?.pending).filter(Boolean);
+  if (!pending.length) return;
+
+  const button = document.getElementById('btn-save');
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Saving photos…';
+  try {
+    await Promise.race([
+      Promise.allSettled(pending),
+      new Promise(resolve => setTimeout(resolve, CAPTURE_WAIT_MS)),
+    ]);
+  } finally {
+    button.textContent = label;
+    button.disabled = false;
+  }
+}
+
 function collectPieces() {
   return slotElements().filter(slotHasImage).map(slot => {
     const productUrl = slot.querySelector('.slot-url').value.trim();
@@ -480,7 +513,14 @@ function collectPieces() {
   });
 }
 
-function saveNewLook() {
+// Comfortably longer than image.js allows a download to take, so the wait ends
+// because the copy arrived or definitively failed, not because it timed out.
+const CAPTURE_WAIT_MS = 26000;
+
+async function saveNewLook() {
+  await waitForPendingCaptures();
+  if (document.getElementById('modal-overlay').classList.contains('hidden')) return;
+
   const title = document.getElementById('look-title').value.trim();
   const notes = document.getElementById('look-notes').value.trim();
   const pieces = collectPieces();

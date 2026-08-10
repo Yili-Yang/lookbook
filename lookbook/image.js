@@ -3,7 +3,10 @@
 // that rot when a product sells out, and looks that should still open offline.
 const IMAGE_PROXY = 'https://images.weserv.nl/?url=';
 const PROBE_TIMEOUT_MS = 12000;
-const DOWNLOAD_TIMEOUT_MS = 20000;
+// One slow route must not hold up the whole download, and the total is capped
+// so that saving a look never waits on it for an unpredictable length of time.
+const DOWNLOAD_TIMEOUT_MS = 10000;
+const DOWNLOAD_BUDGET_MS = 22000;
 
 // Roughly 25–45 KB per photo as JPEG, which keeps a few hundred pieces inside
 // the localStorage budget while still looking sharp on a retina card.
@@ -65,15 +68,18 @@ function areaBonus({ width = 0, height = 0 }) {
 // Downloads a photo and returns a downscaled JPEG data URL, or null when every
 // route is blocked (the caller then falls back to hotlinking the original).
 async function captureImage(url) {
-  const attempts = [
-    () => fetchBlob(proxiedImageUrl(url)),
-    () => fetchBlob(url),
-    () => fetchBlob(proxiedImageUrl(url, { width: 500 })),
+  const deadline = Date.now() + DOWNLOAD_BUDGET_MS;
+  const routes = [
+    () => proxiedImageUrl(url),
+    () => url,
+    () => proxiedImageUrl(url, { width: 500 }),
   ];
 
-  for (const attempt of attempts) {
+  for (const route of routes) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
     try {
-      const blob = await attempt();
+      const blob = await fetchBlob(route(), Math.min(remaining, DOWNLOAD_TIMEOUT_MS));
       if (blob && blob.size > 0) return await blobToStoredImage(blob);
     } catch {
       // Try the next route.
@@ -82,9 +88,9 @@ async function captureImage(url) {
   return null;
 }
 
-async function fetchBlob(url) {
+async function fetchBlob(url, timeoutMs = DOWNLOAD_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { signal: controller.signal, referrerPolicy: 'no-referrer' });
     if (!res.ok) throw new Error(`http_${res.status}`);
