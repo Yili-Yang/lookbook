@@ -190,9 +190,12 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 32px 64px; }
 .footnote { font-size: 12.5px; color: var(--ink-faint); margin-top: 12px; max-width: 88ch; }
 
 /* ── Metrics ── */
+/* A fixed column count rather than auto-fit: the grids are built to hold
+   exactly eight tiles, so a fixed count always fills its last row instead of
+   leaving a gap where a ninth tile would go. */
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
   background: var(--line-soft);
   border: 1px solid var(--line-soft);
@@ -484,6 +487,10 @@ footer { border-top: 1px solid var(--line); margin-top: 24px; }
 .footer-text.small { font-size: 12px; color: var(--ink-faint); margin-top: 8px; }
 
 /* ── Narrow screens ── */
+@media (max-width: 1080px) {
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 900px) {
   header, main, .footer-inner { padding-left: 20px; padding-right: 20px; }
   .header-actions { align-items: flex-start; }
@@ -496,4 +503,8 @@ footer { border-top: 1px solid var(--line); margin-top: 24px; }
   .scenario.head { display: none; }
   .assume-row { grid-template-columns: 1fr auto; }
   .assume-source { grid-column: 1 / -1; }
+}
+
+@media (max-width: 560px) {
+  .metric-grid { grid-template-columns: 1fr; }
 }
