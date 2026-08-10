@@ -358,6 +358,27 @@ test('fat tails widen the tails without changing the volatility assumption', () 
   assert(spreadFat < spreadNormal * 1.2, 'the middle of the distribution is not blown up too');
 });
 
+test('the return basis shifts the median path, and only when there is volatility', () => {
+  const base = quietConfig({
+    startAge: 40, retireAge: 65, endAge: 90, equityReturn: 0.07, bondReturn: 0.04,
+    sigmaPre: 0.18, sigmaPost: 0.12, cash0: 50000, taxableMix0: 400000, pretax0: 300000,
+    contribPretax: 20000, retireSpend: 80000, livingExpenseMode: 'residual', nSims: 2000,
+  });
+  base.incomes = [{ id: 'i', name: 'Salary', amount: 150000, basis: 'gross', growth: null, startYear: null, endYear: null }];
+  const geometric = runMonteCarlo(base).terminalPercentiles[50];
+  const arithmetic = clone(base);
+  arithmetic.values.returnBasis = 'arithmetic';
+  assert(runMonteCarlo(arithmetic).terminalPercentiles[50] < geometric,
+    'reading the input as an average of yearly returns lowers the compound rate, and so the median');
+
+  const flatGeo = clone(base);
+  Object.assign(flatGeo.values, { sigmaPre: 0, sigmaPost: 0 });
+  const flatArith = clone(flatGeo);
+  flatArith.values.returnBasis = 'arithmetic';
+  assertClose(runMonteCarlo(flatArith).terminalPercentiles[50], runMonteCarlo(flatGeo).terminalPercentiles[50],
+    1, 'with no volatility the two conventions are the same thing');
+});
+
 test('a spending floor prevents debt that an inflexible plan would incur', () => {
   const base = quietConfig({
     startAge: 60, retireAge: 62, endAge: 95, equityReturn: 0.05, bondReturn: 0.03,

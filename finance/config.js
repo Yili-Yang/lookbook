@@ -204,6 +204,15 @@ const FIELDS = [
     help: 'Nominal yield on cash. Note that cash yields near or below inflation mean the emergency fund loses real value over time.',
   },
   {
+    key: 'returnBasis', group: 'returns', label: 'What the return figures mean', type: 'choice',
+    def: 'geometric', personal: false,
+    options: [
+      ['geometric', 'Compound annual growth — the rate actually earned over time'],
+      ['arithmetic', 'Arithmetic average of yearly returns'],
+    ],
+    help: 'This choice matters more than it looks. An arithmetic average is higher than the compound rate the same volatile portfolio actually delivers, so reading a 7% input as an arithmetic average makes the median simulated path land well below the deterministic one. Published forward-looking capital market assumptions are usually quoted as compound rates, which is why that is the default; the deterministic ledger compounds at exactly this rate either way.',
+  },
+  {
     key: 'equityPctPre', group: 'returns', label: 'Equity allocation before retirement', type: 'pct',
     def: 0.9, personal: true,
     help: 'Equity share of the invested mix (taxable brokerage, pre-tax, and Roth) while working. Pull the real allocation from your actual statements rather than assuming a generic split.',

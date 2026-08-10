@@ -455,7 +455,12 @@ function runMonteCarlo(cfg, deterministic) {
     const inf = row.deflator;
     const mean = retired ? d.returnPost : d.returnPre;
     const sigma = retired ? v.sigmaPost : v.sigmaPre;
-    const mu = Math.log(1 + mean) - 0.5 * sigma * sigma;
+    // Volatility drives a wedge between the average yearly return and the
+    // compound rate actually earned. Which of the two the input represents is
+    // the user's choice, because getting it backwards shifts the whole fan.
+    const mu = v.returnBasis === 'arithmetic'
+      ? Math.log(1 + mean) - 0.5 * sigma * sigma
+      : Math.log(1 + mean);
     const houseEquity = row.houseEquity;
 
     // Spending that is fixed across paths: goal costs, and the retirement
@@ -583,7 +588,9 @@ function runMonteCarlo(cfg, deterministic) {
     ages: det.rows.map(r => r.age),
     bands,
     terminalPercentiles: Object.fromEntries(pcts.map(p => [p, quantileSorted(terminal, p / 100)])),
+    terminalPercentilesLiquid: Object.fromEntries(pcts.map(p => [p, quantileSorted(terminalLiquid, p / 100)])),
     terminalSamples: terminal,
+    terminalSamplesLiquid: terminalLiquid,
     probEverInDebt: mean(everInDebt),
     probEverCutSpending: mean(everCut),
     probDepleted: mean(everDepleted),
