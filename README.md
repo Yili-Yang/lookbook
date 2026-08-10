@@ -46,7 +46,7 @@ Shops very often advertise their own logo as the page's preview image, so the ap
 - **Your colours.** Every photo you have saved is sampled down to the wardrobe colours it is actually made of — ecru, olive, navy, camel and so on — matched perceptually rather than by raw RGB. The panel shows the tones you lean on and the ones that would go with them but are missing.
 - **What style writers are posting.** A rotating handful of independent style blogs and magazines are read, and the garments and cloths they keep coming back to are pulled out.
 
-The two are combined: the writers supply the garment and the fabric, your wardrobe supplies the colour. Each suggestion says where it came from and why that colour.
+The two are combined: the writers supply the garment and the fabric, your wardrobe supplies the colour. Each suggestion explains why that colour, and shows the posts it actually came out of — the headline, the publication, and the post's own photograph — so you can see what the idea looks like and click through to read it. Posts that are genuinely about that garment are preferred over ones that merely sat next to the mention.
 
 **Build this look** searches the web for each piece, then opens Add Look already filled in with the product links, photos fetched and ready to pick from. You review it and press Save. Anything the search could not find is left as an open piece with a note, so you can paste a link or photo yourself.
 
