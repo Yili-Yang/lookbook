@@ -714,15 +714,21 @@ function renderOutfits(gathered) {
     return;
   }
 
-  const readAt = new Date(gathered.readAt);
   list.innerHTML = `
     <p class="ideas-meta">From ${gathered.sources.map(source => `<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.name)}</a>`).join(', ')}
-      · read ${esc(readAt.toLocaleString())}</p>
+      · read ${esc(readWhen(gathered.readAt))}</p>
     ${currentOutfits.map(renderOutfitCard).join('')}`;
 
   list.querySelectorAll('[data-build]').forEach(button => {
     button.addEventListener('click', () => buildLookFromIdea(button.dataset.build));
   });
+}
+
+function readWhen(timestamp) {
+  const date = new Date(timestamp);
+  return date.toDateString() === new Date().toDateString()
+    ? `today at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : `on ${date.toLocaleDateString()}`;
 }
 
 function renderOutfitCard(outfit) {
