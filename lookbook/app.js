@@ -102,6 +102,31 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
 }
 
+// Opens Add Look already filled in from an idea, and starts fetching each
+// product so the photos are there by the time the user looks at it. A piece
+// that could not be found is left open with a note saying what it was.
+function openModalWithProducts({ title = '', notes = '', pieces = [] }) {
+  openModal();
+  document.getElementById('look-title').value = title;
+  document.getElementById('look-notes').value = notes;
+
+  while (slotElements().length < pieces.length) addPieceSlot();
+  const slots = slotElements();
+
+  pieces.forEach((piece, index) => {
+    const slot = slots[index];
+    if (!slot) return;
+    if (piece.url) {
+      slot.querySelector('.slot-url').value = piece.url;
+      triggerFetch(slot);
+      return;
+    }
+    setStatus(slot, `No ${esc(piece.label)} turned up in a search — paste a link or a photo for it.`, 'error');
+    openManual(slot);
+  });
+  updateSaveButton();
+}
+
 function slotElements() {
   return [...document.getElementById('pieces-container').querySelectorAll('.piece-slot')];
 }
@@ -246,7 +271,12 @@ function setBusy(slot, busy) {
 }
 
 // ── Fetching product photos ────────────────────────────────────────────────
-async function triggerFetch(slot) {
+function triggerFetch(slot) {
+  slot.slotState.fetching = runFetch(slot);
+  return slot.slotState.fetching;
+}
+
+async function runFetch(slot) {
   const state = slot.slotState;
   const urlInput = slot.querySelector('.slot-url');
   const url = urlInput.value.trim();
@@ -477,21 +507,33 @@ function updateSaveButton() {
   document.getElementById('btn-save').disabled = !(title && slotElements().some(slotHasImage));
 }
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, ms)));
+
 // Saving a moment after picking a photo used to store only the shop's link,
-// because the copy was still downloading. Give it a moment to land first.
+// because the copy was still downloading — and a look built from an idea could
+// be saved while its pages were still being read.
 async function waitForPendingCaptures() {
-  const pending = slotElements().map(slot => slot.slotState?.pending).filter(Boolean);
-  if (!pending.length) return;
+  const outstanding = () => slotElements()
+    .flatMap(slot => [slot.slotState?.fetching, slot.slotState?.pending])
+    .filter(Boolean);
+  if (!outstanding().length) return;
 
   const button = document.getElementById('btn-save');
   const label = button.textContent;
   button.disabled = true;
-  button.textContent = 'Saving photos…';
+  button.textContent = 'Finishing…';
+  const deadline = Date.now() + SAVE_WAIT_MS;
+
   try {
-    await Promise.race([
-      Promise.allSettled(pending),
-      new Promise(resolve => setTimeout(resolve, CAPTURE_WAIT_MS)),
-    ]);
+    // Reading a page starts a photo downloading, so waiting once is not enough:
+    // keep going until a round produces no work that has not been waited on.
+    const waited = new Set();
+    while (Date.now() < deadline) {
+      const work = outstanding().filter(promise => !waited.has(promise));
+      if (!work.length) break;
+      work.forEach(promise => waited.add(promise));
+      await Promise.race([Promise.allSettled(work), delay(deadline - Date.now())]);
+    }
   } finally {
     button.textContent = label;
     button.disabled = false;
@@ -513,9 +555,10 @@ function collectPieces() {
   });
 }
 
-// Comfortably longer than image.js allows a download to take, so the wait ends
-// because the copy arrived or definitively failed, not because it timed out.
-const CAPTURE_WAIT_MS = 26000;
+// Comfortably longer than reading a page and downloading its photo take, so the
+// wait ends because the work finished or definitively failed, not because it
+// ran out of time.
+const SAVE_WAIT_MS = 40000;
 
 async function saveNewLook() {
   await waitForPendingCaptures();
@@ -549,6 +592,200 @@ async function saveNewLook() {
   }
 
   alert('There is no room left in this browser\'s storage. Delete a look or two and try again.');
+}
+
+// ── Ideas ──────────────────────────────────────────────────────────────────
+let currentOutfits = [];
+
+function openIdeas() {
+  document.getElementById('ideas-overlay').classList.remove('hidden');
+  renderPaletteStrip();
+  if (currentOutfits.length) return;
+
+  const cached = readIdeasCache();
+  if (cached) {
+    showOutfits(cached);
+  } else {
+    setIdeasStatus('');
+    document.getElementById('ideas-list').innerHTML = `
+      <p class="ideas-intro">Reads what a handful of independent style writers are posting right now,
+      then suggests outfits in the colours your lookbook already lives in.</p>`;
+  }
+}
+
+function closeIdeas() {
+  document.getElementById('ideas-overlay').classList.add('hidden');
+}
+
+function setIdeasStatus(html, tone = '') {
+  const el = document.getElementById('ideas-status');
+  if (!html) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+  el.className = `slot-status ${tone}`.trim();
+  el.innerHTML = html;
+}
+
+async function renderPaletteStrip() {
+  const el = document.getElementById('ideas-palette');
+  el.innerHTML = `<span class="palette-note">Reading the colours in your photos…</span>`;
+
+  const palette = await currentPalette();
+  if (!palette.length) {
+    el.innerHTML = `<span class="palette-note">No photos to read yet — working from a neutral base of
+      ${DEFAULT_PALETTE.join(', ')}. Save a look or two and this follows your own colours.</span>`;
+    return;
+  }
+
+  const accents = suggestedAccents(palette.map(entry => entry.name));
+  el.innerHTML = palette.map(entry => `
+    <span class="swatch" title="${Math.round(entry.share * 100)}% of your saved photos">
+      <span class="swatch-dot" style="background:${esc(rgbCss(entry.rgb))}"></span>${esc(entry.name)}
+    </span>
+  `).join('') + (accents.length ? `
+    <span class="palette-note">Missing, and would work: ${accents.map(name => `
+      <span class="swatch swatch-ghost"><span class="swatch-dot" style="background:${esc(colorHex(name))}"></span>${esc(name)}</span>
+    `).join('')}</span>` : '');
+}
+
+function rgbCss([r, g, b]) {
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// The palette is derived from the saved photos, and falls back to the colours
+// named in the style note when there are no photos to read.
+async function currentPalette() {
+  const fromPhotos = await paletteFromLooks(looks);
+  if (fromPhotos.length) return fromPhotos;
+  return paletteFromText(loadPrefs());
+}
+
+async function findIdeas({ refresh = false } = {}) {
+  const findButton = document.getElementById('btn-ideas-find');
+  findButton.disabled = true;
+  if (refresh) {
+    clearIdeasCache();
+    currentOutfits = [];
+  }
+
+  try {
+    setIdeasStatus(`<span class="spinner"></span> Reading style blogs…`, 'busy');
+    const gathered = await gatherStyleIdeas({
+      onProgress: message => setIdeasStatus(`<span class="spinner"></span> ${esc(message)}`, 'busy'),
+    });
+    await showOutfits(gathered);
+  } catch (err) {
+    setIdeasStatus(err?.message === 'no_sources_read'
+      ? 'None of the style blogs would load just now. Try again in a minute.'
+      : 'Could not put ideas together just now. Try again in a minute.', 'error');
+  } finally {
+    findButton.disabled = false;
+    findButton.textContent = 'Find more ideas';
+  }
+}
+
+async function showOutfits(gathered) {
+  const palette = await currentPalette();
+  const paletteNames = palette.length ? palette.map(entry => entry.name) : DEFAULT_PALETTE;
+
+  // What is already owned is as much a statement of taste as the style note,
+  // so both are fed in as preferences.
+  const wardrobeWords = looks.flatMap(look => (look.pieces || []).map(piece => `${piece.name} ${piece.brand}`)).join(' ');
+
+  currentOutfits = buildOutfitIdeas({
+    ideas: gathered.ideas,
+    sources: gathered.sources,
+    palette: paletteNames,
+    accents: suggestedAccents(paletteNames),
+    preferences: `${loadPrefs()} ${wardrobeWords}`,
+  });
+
+  setIdeasStatus('');
+  renderOutfits(gathered);
+}
+
+function renderOutfits(gathered) {
+  const list = document.getElementById('ideas-list');
+  if (!currentOutfits.length) {
+    list.innerHTML = `<p class="ideas-intro">The blogs read today did not mention enough to build an outfit from.
+      Try reading them again.</p>`;
+    return;
+  }
+
+  list.innerHTML = `
+    <p class="ideas-meta">From ${gathered.sources.map(source => `<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.name)}</a>`).join(', ')}
+      · read ${esc(readWhen(gathered.readAt))}</p>
+    ${currentOutfits.map(renderOutfitCard).join('')}`;
+
+  list.querySelectorAll('[data-build]').forEach(button => {
+    button.addEventListener('click', () => buildLookFromIdea(button.dataset.build));
+  });
+}
+
+function readWhen(timestamp) {
+  const date = new Date(timestamp);
+  return date.toDateString() === new Date().toDateString()
+    ? `today at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : `on ${date.toLocaleDateString()}`;
+}
+
+function renderOutfitCard(outfit) {
+  return `
+    <article class="idea-card" data-id="${esc(outfit.id)}">
+      <div class="idea-swatches">
+        ${outfit.colours.map(name => `<span class="swatch-dot lg" style="background:${esc(colorHex(name))}" title="${esc(name)}"></span>`).join('')}
+      </div>
+      <div class="idea-body">
+        <h3 class="idea-title">${esc(outfit.title)}</h3>
+        <p class="idea-why">${esc(outfit.why)}</p>
+        <p class="idea-pieces">${outfit.pieces.map(piece => `<span class="idea-piece">${esc(piece.label)}</span>`).join('')}</p>
+        <div class="idea-actions">
+          <button class="btn-primary btn-sm" data-build="${esc(outfit.id)}">Build this look</button>
+          <span class="idea-progress"></span>
+        </div>
+      </div>
+    </article>`;
+}
+
+// Searches the web for each piece, then hands the product links to the normal
+// Add Look flow so the photos are picked and checked the same way as always.
+async function buildLookFromIdea(id) {
+  const outfit = currentOutfits.find(entry => entry.id === id);
+  if (!outfit) return;
+
+  const card = document.querySelector(`.idea-card[data-id="${CSS.escape(id)}"]`);
+  const progress = card.querySelector('.idea-progress');
+  const button = card.querySelector('[data-build]');
+  button.disabled = true;
+
+  const found = [];
+  for (const piece of outfit.pieces) {
+    progress.innerHTML = `<span class="spinner"></span> Looking for ${esc(piece.label)}…`;
+    let url = null;
+    try {
+      url = await searchProductUrl(piece.label);
+    } catch {
+      // Treated the same as finding nothing.
+    }
+    found.push({ label: piece.label, url });
+    progress.textContent = url ? `Found ${new URL(url).hostname.replace(/^www\./, '')}` : '';
+  }
+
+  button.disabled = false;
+  if (!found.some(piece => piece.url)) {
+    progress.textContent = 'Nothing turned up for either piece. Open Add Look and paste a link yourself.';
+    return;
+  }
+
+  progress.textContent = '';
+  closeIdeas();
+  openModalWithProducts({
+    title: outfit.title,
+    notes: `${outfit.why}\n\nSuggested by ${outfit.sources.join(', ')}.`,
+    pieces: found,
+  });
 }
 
 // ── Preferences drawer ─────────────────────────────────────────────────────
@@ -649,6 +886,14 @@ function init() {
   });
   document.addEventListener('paste', handleModalPaste);
 
+  document.getElementById('btn-ideas').addEventListener('click', openIdeas);
+  document.getElementById('ideas-close').addEventListener('click', closeIdeas);
+  document.getElementById('btn-ideas-find').addEventListener('click', () => findIdeas());
+  document.getElementById('btn-ideas-refresh').addEventListener('click', () => findIdeas({ refresh: true }));
+  document.getElementById('ideas-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('ideas-overlay')) closeIdeas();
+  });
+
   document.getElementById('btn-prefs').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
@@ -657,6 +902,7 @@ function init() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
+      if (!document.getElementById('ideas-overlay').classList.contains('hidden')) closeIdeas();
       if (!document.getElementById('prefs-drawer').classList.contains('hidden')) closeDrawer();
     }
   });

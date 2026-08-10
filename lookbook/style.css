@@ -667,6 +667,126 @@ main {
   margin-top: -6px;
 }
 
+/* ── Ideas ── */
+.modal-wide { max-width: 640px; }
+
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+
+.palette-block { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+
+.palette-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.swatch-ghost { color: var(--ink-soft); }
+
+.swatch-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.swatch-dot.lg { width: 22px; height: 22px; }
+
+.palette-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ideas-intro, .ideas-meta {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.ideas-meta { margin-bottom: 14px; }
+.ideas-meta a { color: var(--ink); }
+
+.idea-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.idea-card:first-of-type { border-top: none; }
+
+.idea-swatches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 3px;
+  flex-shrink: 0;
+}
+
+.idea-body { flex: 1; min-width: 0; }
+
+.idea-title {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin-bottom: 5px;
+}
+
+.idea-why {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.idea-pieces { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+
+.idea-piece {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.idea-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.idea-progress {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ── Spinner ── */
 .spinner {
   display: inline-block;
