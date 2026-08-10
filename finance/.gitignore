@@ -1,0 +1,10 @@
+# Real statements and anything exported from a bank stay out of version control,
+# even in a private repository. Keep them here and they will be ignored.
+source_documents/
+*.pdf
+*.csv
+*.ofx
+*.qfx
+
+# Exported plans hold your real figures. Keep them if you like, but not here.
+finance-*.json

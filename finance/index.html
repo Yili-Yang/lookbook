@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance — projection &amp; Monte Carlo</title>
+  <!-- Inline rather than a file, so the page never requests an icon that is not
+       there. The webfonts below are the only remote request the app makes, and
+       they fall back to the system stack when they cannot be reached. -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%236b5d3f'/><path d='M4 11.5 L6.5 7 L9 9.5 L12 4' stroke='%23f5f1ea' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="header-title">
+        <p class="eyebrow">Personal finance model</p>
+        <h1>Finance.</h1>
+        <p class="lede">A year-by-year projection of your own numbers, and a few thousand randomized versions of it, so the plan is described by a range instead of a single confident line.</p>
+      </div>
+      <div class="header-actions">
+        <label class="plan-name">
+          <span class="field-label">Plan name</span>
+          <input type="text" id="plan-name" autocomplete="off">
+        </label>
+        <div class="button-row">
+          <button class="btn-ghost btn-sm" id="btn-export">Export</button>
+          <button class="btn-ghost btn-sm" id="btn-import">Import</button>
+          <button class="btn-ghost btn-sm" id="btn-reset">Reset</button>
+          <input type="file" id="import-file" accept="application/json,.json" class="hidden">
+        </div>
+        <p class="privacy-note">Stored only in this browser. Nothing is uploaded. Never enter account numbers.</p>
+      </div>
+    </div>
+
+    <div id="placeholder-banner" class="banner hidden"></div>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="inputs">Inputs</button>
+      <button class="tab" data-tab="ledger">Ledger</button>
+      <button class="tab" data-tab="risk">Risk</button>
+      <button class="tab" data-tab="scenarios">Scenarios</button>
+      <button class="tab" data-tab="assumptions">Assumptions</button>
+      <button class="tab" data-tab="verify">Verify</button>
+      <button class="tab" data-tab="open">Open items</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ── Overview ─────────────────────────────────────────────────────── -->
+    <section class="panel" id="panel-overview">
+      <div id="warnings"></div>
+
+      <div class="metric-grid" id="metric-grid"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Levers</h2>
+            <p class="card-blurb">Drag to see what actually moves the outcome. Changes are saved to your plan, so put a lever back where you found it if you were only looking.</p>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-levers-reset">Undo lever changes</button>
+        </div>
+        <div class="lever-grid" id="lever-grid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Where the money sits</h2>
+            <p class="card-blurb">Balances by bucket over time, in today's dollars and on an after-tax basis — pre-tax accounts are shown discounted by the withdrawal rate, taxable accounts net of embedded gains tax. This is the deterministic path: one set of point-estimate assumptions, no randomness.</p>
+          </div>
+        </div>
+        <div class="chart-holder" id="chart-balances"></div>
+        <div class="legend" id="legend-balances"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>The range of outcomes</h2>
+            <p class="card-blurb">Every randomized path, summarized as percentile bands, with the deterministic path drawn over the top. If the deterministic line sits well above the median band, the point-estimate projection is flattering you.</p>
+          </div>
+          <button class="btn-ghost btn-sm" data-goto="risk">See the risk detail</button>
+        </div>
+        <div class="chart-holder" id="chart-fan-mini"></div>
+        <div class="legend" id="legend-fan-mini"></div>
+      </div>
+
+      <div class="card">
+        <h2>What this model does not know</h2>
+        <div id="limitations-short"></div>
+        <button class="btn-ghost btn-sm" data-goto="assumptions">Read the full assumptions</button>
+      </div>
+    </section>
+
+    <!-- ── Inputs ───────────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-inputs">
+      <div class="card intake">
+        <h2>Before you trust any number on this screen</h2>
+        <p class="card-blurb">Every figure below ships as an illustrative placeholder. They are round numbers chosen to make the model run, not advice and not anyone's real situation. Replace each one with your own figure, then mark it verified with a note on where it came from — six months from now that note is the difference between a number you can rely on and a number you have to re-derive.</p>
+        <ol class="intake-list" id="intake-list"></ol>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Income streams</h2>
+            <p class="card-blurb">One row per stream: salary, a partner's salary, self-employment, rental income, a pension. Amounts are in today's dollars and grow at their own rate from now, so a stream that starts later still arrives having grown. Mark clearly whether a figure is gross or take-home — conflating the two is the easiest error to make here.</p>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-add-income">Add stream</button>
+        </div>
+        <div id="income-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Goals</h2>
+            <p class="card-blurb">Anything that costs money on a schedule: a home purchase, tuition, a sabbatical, supporting a family member, a car. Give a goal an end year to repeat it every year in the range, which is how a temporary expense should be modeled.</p>
+          </div>
+          <button class="btn-ghost btn-sm" id="btn-add-goal">Add goal</button>
+        </div>
+        <div class="callout" id="goal-trap-note"></div>
+        <div id="goal-list"></div>
+      </div>
+
+      <div id="field-groups"></div>
+    </section>
+
+    <!-- ── Ledger ───────────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-ledger">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Year-by-year ledger</h2>
+            <p class="card-blurb">The deterministic projection in full. This is the artifact worth reading closely: if a year looks wrong here, the charts everywhere else are wrong in the same way.</p>
+          </div>
+          <div class="button-row">
+            <label class="inline-toggle"><input type="checkbox" id="ledger-real" checked> Today's dollars</label>
+            <button class="btn-ghost btn-sm" id="btn-export-csv">Export CSV</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="ledger" id="ledger-table"></table>
+        </div>
+        <p class="footnote" id="ledger-note"></p>
+      </div>
+    </section>
+
+    <!-- ── Risk ─────────────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-risk">
+      <div class="metric-grid" id="risk-metrics"></div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Percentile fan</h2>
+            <p class="card-blurb">After-tax net worth in today's dollars across every simulated path.</p>
+          </div>
+          <label class="inline-toggle"><input type="checkbox" id="fan-include-house" checked> Include property equity</label>
+        </div>
+        <div class="chart-holder" id="chart-fan"></div>
+        <div class="legend" id="legend-fan"></div>
+        <p class="footnote">Property is not simulated: its value follows the deterministic path in every scenario, so including it narrows the visible spread without adding any real certainty. Turn it off to see the fan for money you could actually spend.</p>
+      </div>
+
+      <div class="card">
+        <h2>Share of paths still solvent</h2>
+        <p class="card-blurb">The fraction of simulated paths that still hold spendable assets at each age. Read the age where this line starts bending, not just the number at the end.</p>
+        <div class="chart-holder" id="chart-solvent"></div>
+      </div>
+
+      <div class="card">
+        <h2>Where paths end up</h2>
+        <p class="card-blurb">Final after-tax net worth in today's dollars, one bar per band of outcomes. The long right tail is why the average outcome is a bad planning number and the median is a better one.</p>
+        <div class="chart-holder" id="chart-hist"></div>
+        <p class="footnote" id="hist-note"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Simulation settings</h2>
+            <p class="card-blurb">How the paths are generated, and which risks are switched on. The optional ones are off by default because each is a real judgment call about how much realism is worth the added complexity.</p>
+          </div>
+        </div>
+        <div id="risk-fields"></div>
+      </div>
+    </section>
+
+    <!-- ── Scenarios ────────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-scenarios">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Saved scenarios</h2>
+            <p class="card-blurb">Freeze the current plan under a name, change something, and compare. Retiring two years earlier and spending 10% less are the two levers that usually dominate everything else, and this is where you find out by how much.</p>
+          </div>
+          <div class="button-row">
+            <input type="text" id="scenario-name" placeholder="Name this scenario" autocomplete="off">
+            <button class="btn-solid btn-sm" id="btn-save-scenario">Save current</button>
+          </div>
+        </div>
+        <div id="scenario-list"></div>
+      </div>
+    </section>
+
+    <!-- ── Assumptions ──────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-assumptions">
+      <div class="card">
+        <h2>Why the model looks the way it does</h2>
+        <p class="card-blurb">Current state only, generated from your inputs and the notes you wrote when you verified them. This is deliberately not a changelog: the history of how a number evolved lives in the project's git history, where the diffs are real and never drift out of sync with the code.</p>
+        <div id="assumptions-body"></div>
+      </div>
+
+      <div class="card">
+        <h2>Structural choices worth knowing about</h2>
+        <div id="structural-notes"></div>
+      </div>
+
+      <div class="card">
+        <h2>Known limitations</h2>
+        <p class="card-blurb">Accepted simplifications, disclosed rather than hidden. A model that is honest about what it leaves out is far more useful than one that quietly implies precision it does not have. These are different from the Open items tab: a limitation is something currently accepted, an open item is something that should actually get resolved.</p>
+        <div id="limitations-full"></div>
+      </div>
+
+      <div class="card">
+        <h2>IRS Uniform Lifetime Table</h2>
+        <p class="card-blurb">Public IRS data, used to size required minimum distributions: the start-of-year pre-tax balance divided by the distribution period for that age.</p>
+        <div class="table-scroll">
+          <table class="ledger compact" id="ult-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Verify ───────────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-verify">
+      <div class="card">
+        <h2>Research this yourself</h2>
+        <p class="card-blurb">These are the parts of the model that cannot be inherited from a template. Tax law changes, thresholds move, and treatment varies by state and city — so each item below needs checking against current rules for your own situation, and the placeholder rates in the model are worth exactly nothing until you do.</p>
+        <div id="research-list"></div>
+      </div>
+    </section>
+
+    <!-- ── Open items ───────────────────────────────────────────────────── -->
+    <section class="panel hidden" id="panel-open">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Open items</h2>
+            <p class="card-blurb">Things that need a decision, a real number, or a methodology improvement. When one gets resolved, delete it and put the answer in the source note on the field it was about, so the two never describe the same open question.</p>
+          </div>
+          <div class="button-row">
+            <input type="text" id="todo-input" placeholder="Add an open item" autocomplete="off">
+            <button class="btn-solid btn-sm" id="btn-add-todo">Add</button>
+          </div>
+        </div>
+        <div id="todo-list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Notes</h2>
+        <p class="card-blurb">Scratch space that travels with the plan when you export it.</p>
+        <textarea id="notes" rows="8" placeholder="Anything worth remembering about this plan."></textarea>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-text">A projection is not a prediction. Every number here follows from assumptions you supplied, and the ones about tax, returns, and how long you live are the ones most likely to be wrong.</p>
+      <p class="footer-text small">Not financial, tax, or legal advice. Data lives in this browser's local storage on this device — export it if you would mind losing it.</p>
+    </div>
+  </footer>
+
+  <script src="format.js"></script>
+  <script src="config.js"></script>
+  <script src="model.js"></script>
+  <script src="charts.js"></script>
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
