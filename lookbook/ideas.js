@@ -11,7 +11,7 @@ const STYLE_SOURCES = [
   { name: 'Blackbird Spyplane', url: 'https://www.blackbirdspyplane.com/', voice: 'off-centre recommendations' },
 ];
 
-const SOURCES_PER_RUN = 4;
+const SOURCES_PER_RUN = 5;
 const IDEAS_CACHE_KEY = 'lookbook-ideas-cache';
 const IDEAS_CACHE_MS = 12 * 60 * 60 * 1000;
 
@@ -203,18 +203,49 @@ function scoreIdea(idea, { palette, accents, preferenceWords }) {
 
 // Prefers a colour the writer already suggested when the wardrobe agrees with
 // it, and otherwise dresses the garment in a colour that suits what is owned.
-function chooseColour(idea, { palette, accents, avoid = [] }) {
-  const shared = idea.colours.find(colour => palette.includes(colour) && !avoid.includes(colour));
+// Colours already spent on other suggestions are skipped, so a list of ideas
+// does not come back as five variations on navy.
+function chooseColour(idea, { palette, accents, avoid = [], taken = [] }) {
+  const free = colour => colour && !avoid.includes(colour) && !taken.includes(colour);
+
+  const shared = idea.colours.find(colour => palette.includes(colour) && free(colour));
   if (shared) return { colour: shared, reason: 'wardrobe' };
 
-  const accent = accents.find(colour => !avoid.includes(colour));
-  const owned = palette.find(colour => !avoid.includes(colour));
-  const suggested = idea.colours.find(colour => !avoid.includes(colour));
-
+  const accent = accents.find(free);
   if (accent) return { colour: accent, reason: 'accent' };
+
+  const suggested = idea.colours.find(free);
   if (suggested) return { colour: suggested, reason: 'source' };
+
+  const owned = palette.find(free);
   if (owned) return { colour: owned, reason: 'wardrobe' };
-  return { colour: DEFAULT_PALETTE.find(colour => !avoid.includes(colour)) || 'ecru', reason: 'default' };
+
+  // Everything suitable is already used; repeating beats returning nothing.
+  const fallback = [...accents, ...palette, ...DEFAULT_PALETTE].find(colour => !avoid.includes(colour));
+  return { colour: fallback || 'ecru', reason: 'wardrobe' };
+}
+
+// Writers usually name the garment and leave the cloth to the reader. Without
+// one, a search returns a department rather than a shirt, so each garment has a
+// sensible default — presented as part of the suggestion, never as something a
+// writer said. Garments that already imply their cloth get none.
+const DEFAULT_MATERIALS = {
+  'camp collar shirt': 'linen', 'camp-collar shirt': 'linen', 'oxford shirt': 'cotton',
+  'button-down shirt': 'cotton', 'button down shirt': 'cotton', 'polo shirt': 'cotton',
+  'crewneck sweater': 'merino', 'crew neck sweater': 'merino', 'cardigan': 'wool',
+  'turtleneck': 'merino', 'sweatshirt': 'cotton', 'henley': 'cotton', 'tank top': 'cotton',
+  't-shirt': 'cotton', 'tee': 'cotton', 'blouse': 'silk', 'shirt': 'cotton', 'sweater': 'merino',
+  'jumper': 'merino', 'knit': 'cotton', 'polo': 'cotton', 'vest': 'wool',
+  'pleated trousers': 'wool', 'wide-leg trousers': 'linen', 'wide leg trousers': 'linen',
+  'cargo trousers': 'cotton', 'chinos': 'cotton', 'trousers': 'wool', 'pants': 'cotton',
+  'shorts': 'cotton', 'skirt': 'cotton', 'midi skirt': 'linen',
+  'sport coat': 'wool', 'chore coat': 'cotton', 'chore jacket': 'cotton', 'trench coat': 'cotton',
+  'field jacket': 'cotton', 'overshirt': 'wool', 'blazer': 'wool', 'coat': 'wool',
+  'loafers': 'suede', 'derbies': 'leather', 'boots': 'leather', 'sandals': 'leather', 'mules': 'leather',
+};
+
+function materialFor(idea) {
+  return idea.material || DEFAULT_MATERIALS[idea.garment] || '';
 }
 
 function pieceLabel({ colour, material, garment }) {
@@ -235,18 +266,27 @@ function buildOutfitIdeas({ ideas, sources, palette, accents, preferences = '', 
     .map(idea => ({ ...idea, score: scoreIdea(idea, context) }))
     .sort((a, b) => b.score - a.score);
 
-  const tops = ranked.filter(idea => idea.category === 'top');
-  const bottoms = ranked.filter(idea => idea.category === 'bottom');
-  const outers = ranked.filter(idea => idea.category === 'outer');
+  // "Linen camp collar shirt" can be searched for; "shirt" returns a category
+  // page. Anything nameable is used first, whatever the mention count says.
+  const byUsefulness = category => [
+    ...ranked.filter(idea => idea.category === category && isSearchable(idea)),
+    ...ranked.filter(idea => idea.category === category && !isSearchable(idea)),
+  ];
+
+  const tops = byUsefulness('top');
+  const bottoms = orderBottoms(byUsefulness('bottom'), preferences);
+  const outers = byUsefulness('outer');
 
   const outfits = [];
   const usedGarments = new Set();
+  const usedColours = [];
 
   for (const top of tops) {
     if (outfits.length >= limit) break;
     if (usedGarments.has(top.garment)) continue;
 
-    const topColour = chooseColour(top, { palette, accents, avoid });
+    const topColour = chooseColour(top, { palette, accents, avoid, taken: usedColours });
+    usedColours.push(topColour.colour);
     const bottom = bottoms.find(candidate =>
       !usedGarments.has(candidate.garment) &&
       candidate.garment !== top.garment &&
@@ -257,10 +297,7 @@ function buildOutfitIdeas({ ideas, sources, palette, accents, preferences = '', 
     usedGarments.add(top.garment);
     usedGarments.add(bottom.garment);
 
-    const pieces = [
-      { ...top, colour: topColour.colour, label: pieceLabel({ ...top, colour: topColour.colour }) },
-      { ...bottom, colour: bottomColour, label: pieceLabel({ ...bottom, colour: bottomColour }) },
-    ];
+    const pieces = [describePiece(top, topColour.colour), describePiece(bottom, bottomColour)];
 
     outfits.push({
       id: `${top.garment}-${bottom.garment}`.replace(/\s+/g, '-'),
@@ -279,10 +316,43 @@ function buildOutfitIdeas({ ideas, sources, palette, accents, preferences = '', 
     if (!outer || outfit.pieces.length > 2) continue;
     const colour = pickBottomColour(outer, outfit.colours[0], { palette, accents, avoid });
     if (!colour || outfit.colours.includes(colour)) continue;
-    outfit.extra = { ...outer, colour, label: pieceLabel({ ...outer, colour }) };
+    outfit.extra = describePiece(outer, colour);
   }
 
   return outfits;
+}
+
+// The cloth is what makes a query specific. "Linen camp collar shirt" finds a
+// shirt; "tank top" finds a department. Multi-word garment names look specific
+// but are not — they are still just the name of a category.
+function describePiece(idea, colour) {
+  const material = materialFor(idea);
+  return {
+    ...idea,
+    colour,
+    material,
+    // Only a cloth the writer actually named may be credited to them.
+    materialFromSource: Boolean(idea.material),
+    label: pieceLabel({ colour, material, garment: idea.garment }),
+  };
+}
+
+function isSearchable(idea) {
+  return Boolean(idea.material);
+}
+
+// Skirts and dresses only belong in a suggestion if the wardrobe or the style
+// note gives some sign they are wanted; otherwise they go last rather than
+// being dropped, since this is a guess and not a rule.
+const WOMENSWEAR_HINT = /\b(?:skirt|skirts|dress|dresses|blouse|midi|maxi|women|womens|women's|her)\b/i;
+const WOMENSWEAR_GARMENT = /\b(?:skirt|dress)\b/i;
+
+function orderBottoms(bottoms, preferences) {
+  if (WOMENSWEAR_HINT.test(preferences || '')) return bottoms;
+  return [
+    ...bottoms.filter(idea => !WOMENSWEAR_GARMENT.test(idea.garment)),
+    ...bottoms.filter(idea => WOMENSWEAR_GARMENT.test(idea.garment)),
+  ];
 }
 
 function pickBottomColour(idea, topColour, { palette, accents, avoid = [] }) {
@@ -297,24 +367,36 @@ function pickBottomColour(idea, topColour, { palette, accents, avoid = [] }) {
 
 function outfitTitle(pieces) {
   const [top, bottom] = pieces;
-  const name = `${capitalise(top.colour)} ${top.material || ''} ${top.garment}`.replace(/\s+/g, ' ').trim();
-  return `${name} with ${bottom.colour} ${bottom.garment}`;
+  return `${capitalise(top.label)} with ${bottom.label}`;
 }
 
 function capitalise(word) {
   return String(word || '').charAt(0).toUpperCase() + String(word || '').slice(1);
 }
 
+// "Jeans" and "chinos" are already plural; "shirt" is not.
+const ALREADY_PLURAL = /(?:s|jeans|chinos|trousers|shorts|pants)$/i;
+
+function pluralise(garment) {
+  return ALREADY_PLURAL.test(garment) ? garment : `${garment}s`;
+}
+
+function agrees(garment, singular, plural) {
+  return ALREADY_PLURAL.test(garment) ? plural : singular;
+}
+
 function explainOutfit(pieces, topColour, { palette }) {
   const [top, bottom] = pieces;
   const writers = [...new Set(top.sources)].slice(0, 2).join(' and ');
+  const subject = pluralise((top.materialFromSource ? `${top.material} ${top.garment}` : top.garment).trim());
   const colourReason = topColour.reason === 'wardrobe'
     ? `${top.colour} is already the tone your lookbook leans on`
     : topColour.reason === 'accent'
-      ? `${top.colour} is the colour missing from a lookbook built on ${palette.slice(0, 2).join(' and ') || 'neutrals'}`
+      ? `${top.colour} is missing from a lookbook built on ${palette.slice(0, 2).join(' and ') || 'neutrals'}`
       : `${top.colour} suits the rest of your wardrobe`;
 
-  return `${capitalise(top.material || top.garment)} ${top.material ? top.garment : 'pieces'} keep coming up on ${writers || 'the blogs read'}, and ${colourReason}. ${capitalise(bottom.colour)} ${bottom.garment} finish it without fighting the top.`;
+  return `${capitalise(subject)} keep coming up on ${writers || 'the blogs read today'}, and ${colourReason}. `
+    + `${capitalise(bottom.label)} ${agrees(bottom.garment, 'finishes', 'finish')} it without fighting the top.`;
 }
 
 // ── Finding something to buy ───────────────────────────────────────────────
@@ -327,7 +409,13 @@ const SEARCH_ENDPOINTS = [
 // Marketplaces, category listings and search results are not a specific
 // product, and a search page dressed up as a result is the most common way a
 // query goes wrong.
-const NOT_A_PRODUCT = /(?:\/search|\/s\?|\/browse\/|\/market\/|\/category\/|\/categories\/|\/collections\/[^/]+\/?$|\/c\/|\/buy\/|\/shop\/?$|\/shop\/[^/]*$|pinterest\.|reddit\.|youtube\.|facebook\.|instagram\.|tiktok\.|wikipedia\.|quora\.|substack\.|blogspot\.|medium\.com|\.pdf$)/i;
+const NOT_A_PRODUCT = new RegExp([
+  '/search', '/s/', '/s\\?', '/sch/', '/browse/', '/market/', '/category/', '/categories/',
+  '/collections/[^/]+/?$', '/c/', '/buy/', '/shop/?$', '/shop/(?!product)',
+  '_normal|[?&](?:filter|facet|refine)', 'pinterest\\.', 'reddit\\.', 'youtube\\.', 'facebook\\.',
+  'instagram\\.', 'tiktok\\.', 'wikipedia\\.', 'quora\\.', 'substack\\.', 'blogspot\\.',
+  'medium\\.com', '\\.pdf$',
+].join('|'), 'i');
 const SEARCH_QUERY = /[?&](?:q|k|s|query|keyword|search|_nkw|srsltid)=/i;
 const LOOKS_LIKE_PRODUCT = /\/(?:products?|p|dp|itm|item|pd)\/|\/product-|-p\d{4,}|\/p\d{4,}/i;
 
@@ -376,6 +464,18 @@ function extractSearchResultUrls(body) {
   return urls;
 }
 
+// A category page and a product page look alike from the outside. What tells
+// them apart is that a product is identified: by a /products/ style path, by an
+// id or SKU, or by a slug long enough to name one specific thing. A path that
+// is only the words searched for — /navy-tank-top — is a department.
+const PRODUCT_ID = /\/[a-z0-9-]*\d{4,}|\/[a-z]*\d+[a-z]+\d*(?:\.html?)?$|-\d{5,}/i;
+
+function namesOneProduct(path) {
+  const lastSegment = path.replace(/\/$/, '').split('/').pop() || '';
+  const words = lastSegment.replace(/\.html?$/i, '').split('-').filter(Boolean);
+  return words.length >= 4;
+}
+
 function scoreProductUrl(url, words) {
   if (NOT_A_PRODUCT.test(url) || SEARCH_QUERY.test(url)) return 0;
 
@@ -385,10 +485,16 @@ function scoreProductUrl(url, words) {
   // and a page that merely sells clothes.
   if (matches < 2) return 0;
 
-  let score = matches * 4;
-  if (LOOKS_LIKE_PRODUCT.test(url)) score += 10;
-  // A descriptive final segment, e.g. /mens-merino-sweater-dark-navy, names one
-  // item even on shops that use no product prefix at all.
-  if (/[^/]+(?:-[^/]+){2,}(?:\.html?)?$/i.test(new URL(url).pathname)) score += 6;
-  return score;
+  const path = new URL(url).pathname;
+  const marked = LOOKS_LIKE_PRODUCT.test(url);
+  const identified = PRODUCT_ID.test(path);
+  const descriptive = namesOneProduct(path);
+  if (!marked && !identified && !descriptive) return 0;
+
+  // Marketplace listings match almost any words and are rarely the piece a
+  // style writer had in mind, so a brand's own shop wins a tie.
+  const marketplace = MARKETPLACE.test(url) ? 8 : 0;
+  return matches * 4 + (marked ? 10 : 0) + (identified ? 6 : 0) + (descriptive ? 4 : 0) - marketplace;
 }
+
+const MARKETPLACE = /(?:amazon\.|ebay\.|walmart\.|aliexpress\.|temu\.|wish\.com|etsy\.|alibaba\.|dhgate\.)/i;

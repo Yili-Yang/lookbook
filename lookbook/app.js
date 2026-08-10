@@ -103,18 +103,26 @@ function closeModal() {
 }
 
 // Opens Add Look already filled in from an idea, and starts fetching each
-// product so the photos are there by the time the user looks at it.
-function openModalWithProducts({ title = '', notes = '', urls = [] }) {
+// product so the photos are there by the time the user looks at it. A piece
+// that could not be found is left open with a note saying what it was.
+function openModalWithProducts({ title = '', notes = '', pieces = [] }) {
   openModal();
   document.getElementById('look-title').value = title;
   document.getElementById('look-notes').value = notes;
 
-  while (slotElements().length < urls.length) addPieceSlot();
+  while (slotElements().length < pieces.length) addPieceSlot();
   const slots = slotElements();
-  urls.forEach((url, index) => {
-    if (!slots[index]) return;
-    slots[index].querySelector('.slot-url').value = url;
-    triggerFetch(slots[index]);
+
+  pieces.forEach((piece, index) => {
+    const slot = slots[index];
+    if (!slot) return;
+    if (piece.url) {
+      slot.querySelector('.slot-url').value = piece.url;
+      triggerFetch(slot);
+      return;
+    }
+    setStatus(slot, `No ${esc(piece.label)} turned up in a search — paste a link or a photo for it.`, 'error');
+    openManual(slot);
   });
   updateSaveButton();
 }
@@ -664,12 +672,16 @@ async function showOutfits(gathered) {
   const palette = await currentPalette();
   const paletteNames = palette.length ? palette.map(entry => entry.name) : DEFAULT_PALETTE;
 
+  // What is already owned is as much a statement of taste as the style note,
+  // so both are fed in as preferences.
+  const wardrobeWords = looks.flatMap(look => (look.pieces || []).map(piece => `${piece.name} ${piece.brand}`)).join(' ');
+
   currentOutfits = buildOutfitIdeas({
     ideas: gathered.ideas,
     sources: gathered.sources,
     palette: paletteNames,
     accents: suggestedAccents(paletteNames),
-    preferences: loadPrefs(),
+    preferences: `${loadPrefs()} ${wardrobeWords}`,
   });
 
   setIdeasStatus('');
@@ -727,20 +739,19 @@ async function buildLookFromIdea(id) {
   const found = [];
   for (const piece of outfit.pieces) {
     progress.innerHTML = `<span class="spinner"></span> Looking for ${esc(piece.label)}…`;
+    let url = null;
     try {
-      const url = await searchProductUrl(piece.label);
-      if (url) {
-        found.push(url);
-        progress.textContent = `Found ${new URL(url).hostname.replace(/^www\./, '')}`;
-      }
+      url = await searchProductUrl(piece.label);
     } catch {
-      // A piece that cannot be found is left for the user to fill in.
+      // Treated the same as finding nothing.
     }
+    found.push({ label: piece.label, url });
+    progress.textContent = url ? `Found ${new URL(url).hostname.replace(/^www\./, '')}` : '';
   }
 
   button.disabled = false;
-  if (!found.length) {
-    progress.textContent = 'Could not find these online — open Add Look and paste a link yourself.';
+  if (!found.some(piece => piece.url)) {
+    progress.textContent = 'Nothing turned up for either piece. Open Add Look and paste a link yourself.';
     return;
   }
 
@@ -749,7 +760,7 @@ async function buildLookFromIdea(id) {
   openModalWithProducts({
     title: outfit.title,
     notes: `${outfit.why}\n\nSuggested by ${outfit.sources.join(', ')}.`,
-    urls: found,
+    pieces: found,
   });
 }
 
