@@ -101,6 +101,19 @@ function debounce(fn, ms) {
   };
 }
 
+// Whether the user is part-way through typing inside this container. Redrawing
+// it now would take the caret with it, so the redraw waits. Only free text
+// counts: a focused button or checkbox has just been clicked, and skipping the
+// redraw then would leave the click looking like it did nothing.
+const NON_TYPING_INPUTS = new Set(['checkbox', 'radio', 'range', 'button', 'submit', 'file']);
+
+function isTypingIn(container) {
+  const el = document.activeElement;
+  if (!el || !container.contains(el)) return false;
+  if (el.tagName === 'TEXTAREA') return true;
+  return el.tagName === 'INPUT' && !NON_TYPING_INPUTS.has(el.type);
+}
+
 // Structural render: the parts made of form controls, rebuilt only when the
 // shape of the plan changes. Rebuilding these on every keystroke would take the
 // caret out of whatever the user was typing into.
@@ -195,7 +208,8 @@ function wireChrome() {
   // Containers holding free text are left alone while they have focus, so a
   // recompute cannot yank a half-typed note out from under the cursor. When
   // focus leaves, they catch up.
-  document.body.addEventListener('focusout', () => setTimeout(renderDerived, 0));
+  const catchUp = debounce(renderDerived, 80);
+  document.body.addEventListener('focusout', catchUp);
 }
 
 function showTab(name) {
@@ -401,11 +415,13 @@ function renderRiskMetrics() {
 
     metricTile('Spending funded at the end', esc(fmtPct(finalSpendRatio, 0)),
       `${flag}Average share of desired spending actually funded in the final year`),
+
+    mc.probLtc == null
+      ? metricTile('Entered long-term care', 'Not modeled',
+        'Any allowance for care is buried inside the flat retirement spending figure. Switch it on below to model it as its own event')
+      : metricTile('Entered long-term care', esc(fmtPct(mc.probLtc, 0)),
+        `${flag}Share of paths with a care event after age ${v.ltcStartAge}`),
   ];
-  if (mc.probLtc != null) {
-    tiles.push(metricTile('Entered long-term care', esc(fmtPct(mc.probLtc, 0)),
-      `${flag}Share of paths with a care event after age ${v.ltcStartAge}`));
-  }
   document.getElementById('risk-metrics').innerHTML = tiles.join('');
 }
 
@@ -416,45 +432,48 @@ function leverSnapshot() {
   return snap;
 }
 
+// What a lever is worth: the same plan with only this one input put back where
+// it started. Everything else stays where it is now, so the figure answers
+// "what did moving this buy me", not "what if I reverted everything".
+function leverEffect(lever) {
+  const v = state.cfg.values;
+  const base = state.leverBase[lever.key];
+  if (v[lever.key] === base) return 'At its starting value.';
+  const reverted = clonePlain(state.cfg);
+  reverted.values[lever.key] = base;
+  const delta = state.det.summary.terminalReal - runDeterministic(reverted).summary.terminalReal;
+  return `${fmtSigned(delta)} at age ${v.endAge} versus ${lever.fmt(base)}.`;
+}
+
 function renderLevers() {
   const v = state.cfg.values;
-  const terminal = state.det.summary.terminalReal;
-
-  const html = LEVERS.map(lever => {
-    const range = lever.range(v);
-    const value = v[lever.key];
-    const base = state.leverBase[lever.key];
-    // What this lever is worth: the same plan with only this one input put
-    // back where it started. Everything else stays where it is now, so the
-    // figure answers "what did moving this buy me", not "what if I reverted
-    // everything".
-    let effect = 'At its starting value.';
-    if (value !== base) {
-      const reverted = clonePlain(state.cfg);
-      reverted.values[lever.key] = base;
-      const delta = terminal - runDeterministic(reverted).summary.terminalReal;
-      effect = `${esc(fmtSigned(delta))} at age ${v.endAge} versus ${esc(lever.fmt(base))}.`;
-    }
-    return `<div class="lever" data-key="${lever.key}">
-      <div class="lever-head">
-        <span class="lever-name">${esc(lever.label)}</span>
-        <span class="lever-value">${esc(lever.fmt(value))}</span>
-      </div>
-      <input type="range" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}">
-      <div class="lever-effect">${effect}</div>
-    </div>`;
-  }).join('');
-
   const grid = document.getElementById('lever-grid');
-  if (grid.contains(document.activeElement)) {
-    // Mid-drag: only refresh the readouts, never replace the slider being held.
+
+  // Mid-drag the slider being held must not be replaced, so only the readouts
+  // are refreshed. They are the part that has to stay live: a lever whose
+  // effect text lagged behind the handle would be worse than no readout.
+  if (grid.querySelector('.lever') && grid.contains(document.activeElement)) {
     for (const el of grid.querySelectorAll('.lever')) {
       const lever = LEVERS.find(l => l.key === el.dataset.key);
+      if (!lever) continue;
       el.querySelector('.lever-value').textContent = lever.fmt(v[lever.key]);
+      el.querySelector('.lever-effect').textContent = leverEffect(lever);
     }
     return;
   }
-  grid.innerHTML = html;
+
+  grid.innerHTML = LEVERS.map(lever => {
+    const range = lever.range(v);
+    return `<div class="lever" data-key="${lever.key}">
+      <div class="lever-head">
+        <span class="lever-name">${esc(lever.label)}</span>
+        <span class="lever-value">${esc(lever.fmt(v[lever.key]))}</span>
+      </div>
+      <input type="range" min="${range.min}" max="${range.max}" step="${range.step}" value="${v[lever.key]}">
+      <div class="lever-effect">${esc(leverEffect(lever))}</div>
+    </div>`;
+  }).join('');
+
   grid.oninput = event => {
     const holder = event.target.closest('.lever');
     if (!holder) return;
@@ -557,9 +576,23 @@ function renderSolventChart() {
      <div class="tip-row"><span>Spending funded</span><span>${esc(fmtPct(mc.avgSpendRatio[index], 0))}</span></div>`);
 }
 
+// The distribution of outcomes has a very long right tail — a handful of paths
+// compound their way to absurd numbers — and drawing it in full squeezes every
+// path you might actually live into the leftmost inch of the chart. The extreme
+// 1% at each end is left off the axis and reported underneath instead, so the
+// tail is disclosed rather than allowed to flatten everything else.
 function renderHistogram() {
   const samples = state.fanIncludeHouse ? state.mc.terminalSamples : state.mc.terminalSamplesLiquid;
-  document.getElementById('chart-hist').innerHTML = histogramChart(samples, 40);
+  const n = samples.length;
+  const loIndex = Math.floor(n * 0.01);
+  const hiIndex = Math.max(loIndex + 1, Math.ceil(n * 0.99));
+  const shown = samples.slice(loIndex, hiIndex);
+  const omitted = n - shown.length;
+
+  document.getElementById('chart-hist').innerHTML = histogramChart(shown, 40);
+  document.getElementById('hist-note').textContent = omitted > 0
+    ? `Drawn from ${fmtShort(shown[0])} to ${fmtShort(shown[shown.length - 1])}. The ${omitted} most extreme of ${n.toLocaleString('en-US')} paths are off the axis at each end — the best of them reaches ${fmtShort(samples[n - 1])}, which says more about compounding over ${state.mc.nYears} years than about a plan.`
+    : `All ${n.toLocaleString('en-US')} paths are drawn.`;
 }
 
 // ── Inputs: the generic field rows ──────────────────────────────────────────
@@ -1148,7 +1181,7 @@ function renderAssumptions() {
   }).join('');
 
   const body = document.getElementById('assumptions-body');
-  if (!body.contains(document.activeElement)) body.innerHTML = `<div class="note-list">${html}</div>`;
+  if (!isTypingIn(body)) body.innerHTML = `<div class="note-list">${html}</div>`;
 
   renderStructuralNotes();
   renderUltTable();
@@ -1325,7 +1358,7 @@ function openItems() {
 
 function renderTodos() {
   const list = document.getElementById('todo-list');
-  if (list.contains(document.activeElement)) return;
+  if (isTypingIn(list)) return;
   const items = openItems();
   if (!items.length) {
     list.innerHTML = '<p class="empty-state">Nothing open. Every placeholder is replaced and every research item is checked.</p>';
