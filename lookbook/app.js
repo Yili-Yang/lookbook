@@ -102,6 +102,23 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
 }
 
+// Opens Add Look already filled in from an idea, and starts fetching each
+// product so the photos are there by the time the user looks at it.
+function openModalWithProducts({ title = '', notes = '', urls = [] }) {
+  openModal();
+  document.getElementById('look-title').value = title;
+  document.getElementById('look-notes').value = notes;
+
+  while (slotElements().length < urls.length) addPieceSlot();
+  const slots = slotElements();
+  urls.forEach((url, index) => {
+    if (!slots[index]) return;
+    slots[index].querySelector('.slot-url').value = url;
+    triggerFetch(slots[index]);
+  });
+  updateSaveButton();
+}
+
 function slotElements() {
   return [...document.getElementById('pieces-container').querySelectorAll('.piece-slot')];
 }
@@ -551,6 +568,191 @@ async function saveNewLook() {
   alert('There is no room left in this browser\'s storage. Delete a look or two and try again.');
 }
 
+// ── Ideas ──────────────────────────────────────────────────────────────────
+let currentOutfits = [];
+
+function openIdeas() {
+  document.getElementById('ideas-overlay').classList.remove('hidden');
+  renderPaletteStrip();
+  if (currentOutfits.length) return;
+
+  const cached = readIdeasCache();
+  if (cached) {
+    showOutfits(cached);
+  } else {
+    setIdeasStatus('');
+    document.getElementById('ideas-list').innerHTML = `
+      <p class="ideas-intro">Reads what a handful of independent style writers are posting right now,
+      then suggests outfits in the colours your lookbook already lives in.</p>`;
+  }
+}
+
+function closeIdeas() {
+  document.getElementById('ideas-overlay').classList.add('hidden');
+}
+
+function setIdeasStatus(html, tone = '') {
+  const el = document.getElementById('ideas-status');
+  if (!html) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+  el.className = `slot-status ${tone}`.trim();
+  el.innerHTML = html;
+}
+
+async function renderPaletteStrip() {
+  const el = document.getElementById('ideas-palette');
+  el.innerHTML = `<span class="palette-note">Reading the colours in your photos…</span>`;
+
+  const palette = await currentPalette();
+  if (!palette.length) {
+    el.innerHTML = `<span class="palette-note">No photos to read yet — working from a neutral base of
+      ${DEFAULT_PALETTE.join(', ')}. Save a look or two and this follows your own colours.</span>`;
+    return;
+  }
+
+  const accents = suggestedAccents(palette.map(entry => entry.name));
+  el.innerHTML = palette.map(entry => `
+    <span class="swatch" title="${Math.round(entry.share * 100)}% of your saved photos">
+      <span class="swatch-dot" style="background:${esc(rgbCss(entry.rgb))}"></span>${esc(entry.name)}
+    </span>
+  `).join('') + (accents.length ? `
+    <span class="palette-note">Missing, and would work: ${accents.map(name => `
+      <span class="swatch swatch-ghost"><span class="swatch-dot" style="background:${esc(colorHex(name))}"></span>${esc(name)}</span>
+    `).join('')}</span>` : '');
+}
+
+function rgbCss([r, g, b]) {
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// The palette is derived from the saved photos, and falls back to the colours
+// named in the style note when there are no photos to read.
+async function currentPalette() {
+  const fromPhotos = await paletteFromLooks(looks);
+  if (fromPhotos.length) return fromPhotos;
+  return paletteFromText(loadPrefs());
+}
+
+async function findIdeas({ refresh = false } = {}) {
+  const findButton = document.getElementById('btn-ideas-find');
+  findButton.disabled = true;
+  if (refresh) {
+    clearIdeasCache();
+    currentOutfits = [];
+  }
+
+  try {
+    setIdeasStatus(`<span class="spinner"></span> Reading style blogs…`, 'busy');
+    const gathered = await gatherStyleIdeas({
+      onProgress: message => setIdeasStatus(`<span class="spinner"></span> ${esc(message)}`, 'busy'),
+    });
+    await showOutfits(gathered);
+  } catch (err) {
+    setIdeasStatus(err?.message === 'no_sources_read'
+      ? 'None of the style blogs would load just now. Try again in a minute.'
+      : 'Could not put ideas together just now. Try again in a minute.', 'error');
+  } finally {
+    findButton.disabled = false;
+    findButton.textContent = 'Find more ideas';
+  }
+}
+
+async function showOutfits(gathered) {
+  const palette = await currentPalette();
+  const paletteNames = palette.length ? palette.map(entry => entry.name) : DEFAULT_PALETTE;
+
+  currentOutfits = buildOutfitIdeas({
+    ideas: gathered.ideas,
+    sources: gathered.sources,
+    palette: paletteNames,
+    accents: suggestedAccents(paletteNames),
+    preferences: loadPrefs(),
+  });
+
+  setIdeasStatus('');
+  renderOutfits(gathered);
+}
+
+function renderOutfits(gathered) {
+  const list = document.getElementById('ideas-list');
+  if (!currentOutfits.length) {
+    list.innerHTML = `<p class="ideas-intro">The blogs read today did not mention enough to build an outfit from.
+      Try reading them again.</p>`;
+    return;
+  }
+
+  const readAt = new Date(gathered.readAt);
+  list.innerHTML = `
+    <p class="ideas-meta">From ${gathered.sources.map(source => `<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.name)}</a>`).join(', ')}
+      · read ${esc(readAt.toLocaleString())}</p>
+    ${currentOutfits.map(renderOutfitCard).join('')}`;
+
+  list.querySelectorAll('[data-build]').forEach(button => {
+    button.addEventListener('click', () => buildLookFromIdea(button.dataset.build));
+  });
+}
+
+function renderOutfitCard(outfit) {
+  return `
+    <article class="idea-card" data-id="${esc(outfit.id)}">
+      <div class="idea-swatches">
+        ${outfit.colours.map(name => `<span class="swatch-dot lg" style="background:${esc(colorHex(name))}" title="${esc(name)}"></span>`).join('')}
+      </div>
+      <div class="idea-body">
+        <h3 class="idea-title">${esc(outfit.title)}</h3>
+        <p class="idea-why">${esc(outfit.why)}</p>
+        <p class="idea-pieces">${outfit.pieces.map(piece => `<span class="idea-piece">${esc(piece.label)}</span>`).join('')}</p>
+        <div class="idea-actions">
+          <button class="btn-primary btn-sm" data-build="${esc(outfit.id)}">Build this look</button>
+          <span class="idea-progress"></span>
+        </div>
+      </div>
+    </article>`;
+}
+
+// Searches the web for each piece, then hands the product links to the normal
+// Add Look flow so the photos are picked and checked the same way as always.
+async function buildLookFromIdea(id) {
+  const outfit = currentOutfits.find(entry => entry.id === id);
+  if (!outfit) return;
+
+  const card = document.querySelector(`.idea-card[data-id="${CSS.escape(id)}"]`);
+  const progress = card.querySelector('.idea-progress');
+  const button = card.querySelector('[data-build]');
+  button.disabled = true;
+
+  const found = [];
+  for (const piece of outfit.pieces) {
+    progress.innerHTML = `<span class="spinner"></span> Looking for ${esc(piece.label)}…`;
+    try {
+      const url = await searchProductUrl(piece.label);
+      if (url) {
+        found.push(url);
+        progress.textContent = `Found ${new URL(url).hostname.replace(/^www\./, '')}`;
+      }
+    } catch {
+      // A piece that cannot be found is left for the user to fill in.
+    }
+  }
+
+  button.disabled = false;
+  if (!found.length) {
+    progress.textContent = 'Could not find these online — open Add Look and paste a link yourself.';
+    return;
+  }
+
+  progress.textContent = '';
+  closeIdeas();
+  openModalWithProducts({
+    title: outfit.title,
+    notes: `${outfit.why}\n\nSuggested by ${outfit.sources.join(', ')}.`,
+    urls: found,
+  });
+}
+
 // ── Preferences drawer ─────────────────────────────────────────────────────
 function openDrawer() {
   document.getElementById('prefs-text').value = loadPrefs();
@@ -649,6 +851,14 @@ function init() {
   });
   document.addEventListener('paste', handleModalPaste);
 
+  document.getElementById('btn-ideas').addEventListener('click', openIdeas);
+  document.getElementById('ideas-close').addEventListener('click', closeIdeas);
+  document.getElementById('btn-ideas-find').addEventListener('click', () => findIdeas());
+  document.getElementById('btn-ideas-refresh').addEventListener('click', () => findIdeas({ refresh: true }));
+  document.getElementById('ideas-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('ideas-overlay')) closeIdeas();
+  });
+
   document.getElementById('btn-prefs').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
@@ -657,6 +867,7 @@ function init() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
+      if (!document.getElementById('ideas-overlay').classList.contains('hidden')) closeIdeas();
       if (!document.getElementById('prefs-drawer').classList.contains('hidden')) closeDrawer();
     }
   });

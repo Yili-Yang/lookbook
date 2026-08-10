@@ -17,6 +17,7 @@
       <h1>Lookbook</h1>
       <div class="topbar-actions">
         <button class="btn-ghost" id="btn-prefs">Preferences</button>
+        <button class="btn-ghost" id="btn-ideas">Ideas</button>
         <button class="btn-primary" id="btn-add">+ Add Look</button>
       </div>
     </div>
@@ -55,6 +56,28 @@
     </div>
   </div>
 
+  <!-- Ideas -->
+  <div id="ideas-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ideas-title">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2 id="ideas-title">Ideas for you</h2>
+        <button class="btn-icon" id="ideas-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <section class="palette-block">
+          <h3 class="section-label">Your colours</h3>
+          <div id="ideas-palette" class="palette-strip"></div>
+        </section>
+        <div id="ideas-status" class="slot-status hidden"></div>
+        <div id="ideas-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="btn-ideas-refresh">Read the blogs again</button>
+        <button class="btn-primary" id="btn-ideas-find">Find ideas</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Preferences drawer -->
   <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
   <aside id="prefs-drawer" class="drawer hidden" aria-label="Style preferences">
@@ -69,6 +92,8 @@
   <script src="store.js"></script>
   <script src="fetch.js"></script>
   <script src="image.js"></script>
+  <script src="palette.js"></script>
+  <script src="ideas.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
