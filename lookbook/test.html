@@ -12,6 +12,12 @@
   const out = document.getElementById('out');
   let passed = 0, failed = 0;
 
+  // Without this a thrown error just stops the run and looks like a short list.
+  window.addEventListener('error', event => {
+    out.textContent += `\n✗ uncaught: ${event.message} (${event.filename}:${event.lineno})\n`;
+    document.title = 'FAILED';
+  });
+
   function assert(label, got, expected) {
     const ok = JSON.stringify(got) === JSON.stringify(expected);
     out.textContent += (ok ? '✓' : '✗') + ' ' + label + (ok ? '' : '\n  got: ' + JSON.stringify(got) + '\n  exp: ' + JSON.stringify(expected)) + '\n';
@@ -290,10 +296,49 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer, over ol
   });
   assert('an outfit pairs a top with a bottom',
     outfits.length && outfits[0].pieces.map(piece => piece.category), ['top', 'bottom']);
+  assert('the write-up agrees with itself grammatically',
+    [/chinos finish it/.test(outfits[0].why), /\bpiecess?\b/.test(outfits[0].why)], [true, false]);
   assert('the top keeps a colour the wardrobe already has', outfits[0].pieces[0].colour, 'ecru');
   assert('the two colours work together',
     colorsGoTogether(outfits[0].colours[0], outfits[0].colours[1]), true);
   assert('each piece reads as something to shop for', outfits[0].pieces[0].label, 'ecru linen camp collar shirt');
+  // Chinos are cotton whether or not the writer said so, and a search needs it.
+  assert('a garment with no stated cloth still gets one', outfits[0].pieces[1].label, 'navy cotton chinos');
+  // But a default must never be quoted back as something the writer claimed.
+  assert('only the writer\'s own words are credited to them',
+    [/cotton chinos keep coming up/i.test(outfits[0].why), /linen camp collar shirts keep coming up/i.test(outfits[0].why)],
+    [false, true]);
+
+
+  // Five suggestions that are all navy are one suggestion.
+  const variedIdeas = mergeIdeas([
+    { garment: 'camp collar shirt', category: 'top', material: 'linen', mentions: 5, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'oxford shirt', category: 'top', material: 'cotton', mentions: 4, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'crewneck sweater', category: 'top', material: 'merino', mentions: 3, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'chinos', category: 'bottom', material: 'cotton', mentions: 4, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'pleated trousers', category: 'bottom', material: 'wool', mentions: 3, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'wide-leg trousers', category: 'bottom', material: 'linen', mentions: 2, colours: [], source: 'a', sourceUrl: '' },
+  ]);
+  const varied = buildOutfitIdeas({
+    ideas: variedIdeas, sources: [], palette: ['ecru', 'navy'], accents: ['olive', 'camel'], preferences: '',
+  });
+  assert('suggestions do not all come back in one colour',
+    new Set(varied.map(outfit => outfit.colours[0])).size, varied.length);
+
+  // A midi skirt is a fine suggestion, but not for a wardrobe that shows no
+  // sign of wanting one.
+  const skirtIdeas = mergeIdeas([
+    { garment: 'oxford shirt', category: 'top', material: 'cotton', mentions: 4, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'midi skirt', category: 'bottom', material: 'linen', mentions: 9, colours: [], source: 'a', sourceUrl: '' },
+    { garment: 'pleated trousers', category: 'bottom', material: 'wool', mentions: 1, colours: [], source: 'a', sourceUrl: '' },
+  ]);
+  const neutralWardrobe = { ideas: skirtIdeas, sources: [], palette: ['ecru'], accents: ['navy'] };
+  assert('skirts wait for a wardrobe that wants them',
+    buildOutfitIdeas({ ...neutralWardrobe, preferences: 'linen, relaxed tailoring' })[0].pieces[1].garment,
+    'pleated trousers');
+  assert('skirts are used when the wardrobe asks for them',
+    buildOutfitIdeas({ ...neutralWardrobe, preferences: 'midi skirts and linen blouses' })[0].pieces[1].garment,
+    'midi skirt');
 
   assert('refused colours stay out of outfits',
     buildOutfitIdeas({
@@ -320,15 +365,25 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer, over ol
   // Shops that use no /product/ prefix still have to work.
   assert('a descriptive address counts as a product',
     scoreProductUrl('https://www.asket.com/en-us/mens-linen-shirt-ecru', words) > 0, true);
+  assert('a product identified by sku is accepted',
+    scoreProductUrl('https://www.charlestyrwhitt.com/us/ecru-linen-shirt/CSF0123ECR.html', words) > 0, true);
   assert('search and listing pages are rejected',
     [scoreProductUrl('https://www.amazon.com/linen-shirt/s?k=linen+shirt', words),
      scoreProductUrl('https://www.nordstrom.com/browse/men/clothing/shirts', words),
      scoreProductUrl('https://www.etsy.com/market/linen_shirt', words),
      scoreProductUrl('https://www.ebay.com/shop/linen-shirt?_nkw=linen+shirt', words),
-     scoreProductUrl('https://www.jcrew.com/buy/ecru-linen-shirts-1aaz00a', words)],
-    [0, 0, 0, 0, 0]);
+     scoreProductUrl('https://www.jcrew.com/buy/ecru-linen-shirts-1aaz00a', words),
+     scoreProductUrl('https://www.target.com/s/ecru+linen+shirt', words),
+     // A path that is only the words searched for is a department, not an item.
+     scoreProductUrl('https://www.zappos.com/ecru-linen-shirt', words),
+     scoreProductUrl('https://www.revolve.com/v/ecru-linen-shirt', words)],
+    [0, 0, 0, 0, 0, 0, 0, 0]);
   assert('a product page about something else is rejected',
     scoreProductUrl('https://shop.example.com/products/wool-overcoat', words), 0);
+  assert('marketplace listings lose to a brand\'s own shop',
+    scoreProductUrl('https://us.drakes.com/products/ecru-linen-camp-collar-shirt', words)
+      > scoreProductUrl('https://www.amazon.com/dp/B07R2F6WLK/ecru-linen-camp-collar-shirt', words),
+    true);
 
   // Something you can search for and buy beats a word that merely appears often.
   const specificity = { palette: [], accents: [], preferenceWords: [] };
