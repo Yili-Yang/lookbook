@@ -39,6 +39,19 @@ Some retailers (Zara and Uniqlo's checkout-heavy pages among them) block automat
 
 Shops very often advertise their own logo as the page's preview image, so the app does not trust that alone. It gathers candidates from page metadata, structured product data, `srcset` and lazy-loading attributes, and the raw page source, then ranks them by where they came from, how large they are, and whether they mention the product named in the page title or URL. Logos, icons, swatches, and promo banners are filtered out. You still get the final say in the picker.
 
+## Ideas
+
+**Ideas** suggests outfits and can build them for you. It works from two things at once:
+
+- **Your colours.** Every photo you have saved is sampled down to the wardrobe colours it is actually made of — ecru, olive, navy, camel and so on — matched perceptually rather than by raw RGB. The panel shows the tones you lean on and the ones that would go with them but are missing.
+- **What style writers are posting.** A rotating handful of independent style blogs and magazines are read, and the garments and cloths they keep coming back to are pulled out.
+
+The two are combined: the writers supply the garment and the fabric, your wardrobe supplies the colour. Each suggestion says where it came from and why that colour.
+
+**Build this look** searches the web for each piece, then opens Add Look already filled in with the product links, photos fetched and ready to pick from. You review it and press Save. Anything the search could not find is left as an open piece with a note, so you can paste a link or photo yourself.
+
+A few honest limitations: the searches sometimes land on a near miss rather than the exact piece, which is why you get the final say before anything is saved. If you have no photos saved yet, the colours are taken from your style note instead — and if that note says "no black", black stays out of the suggestions. Results are cached for half a day; **Read the blogs again** forces a fresh run.
+
 ## Everything else
 
 - **Star** a look to keep it in the ★ Starred filter.
@@ -75,6 +88,18 @@ lookbook/
 ├── store.js          — localStorage read/write
 ├── fetch.js          — reads product pages and ranks their images
 ├── image.js          — downloads, shrinks, and stores photos
+├── palette.js        — reads the colours out of your saved photos
+├── ideas.js          — reads style blogs and turns them into outfit ideas
 ├── app.js            — rendering and interaction
 └── test.html         — browser test suite
 ```
+
+## What it talks to
+
+No accounts and no API keys, but the app does reach three public services from your browser:
+
+- **`r.jina.ai`** renders and returns pages, since shops do not allow a browser on another site to read them directly. Used for product pages, style blogs, and search results.
+- **`images.weserv.nl`** fetches and resizes product photos so they can be stored with the look.
+- **`duckduckgo.com`** answers the product searches behind Ideas.
+
+Nothing about you is sent to them beyond the address being looked up.

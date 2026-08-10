@@ -353,8 +353,15 @@ const CURRENCY_SYMBOLS = { USD: '$', GBP: '£', EUR: '€', JPY: '¥', CNY: '¥'
 
 function formatPrice(amount, currency) {
   if (!amount) return '';
+  // Structured data reports "215.0" and "215.00" for the same price; neither is
+  // how anyone writes it.
+  const number = Number(String(amount).replace(/,/g, ''));
+  const text = Number.isFinite(number)
+    ? (Number.isInteger(number) ? String(number) : number.toFixed(2))
+    : String(amount).trim();
+
   const symbol = CURRENCY_SYMBOLS[String(currency || 'USD').toUpperCase()];
-  return symbol ? symbol + amount : `${currency} ${amount}`;
+  return symbol ? symbol + text : `${currency} ${text}`;
 }
 
 function metaImageCandidates(doc) {

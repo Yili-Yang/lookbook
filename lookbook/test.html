@@ -143,7 +143,10 @@
     ld.images.map(i => i.url).sort(),
     ['https://cdn.example.com/ld-1.jpg', 'https://cdn.example.com/ld-2.jpg']);
   // Without this the shipping threshold in the page body becomes the price.
-  assert('json-ld offer beats a stray dollar amount', ld.price, '£110.00');
+  assert('json-ld offer beats a stray dollar amount', ld.price, '£110');
+  assert('prices are written the way people write them',
+    [formatPrice('215.0', 'USD'), formatPrice('215.50', 'USD'), formatPrice('1,299', 'USD')],
+    ['$215', '$215.50', '$1299']);
   assert('json-ld brand beats the shop name', ld.brand, 'Sunspel');
 
   assert('aggregate offers fall back to the low price',
