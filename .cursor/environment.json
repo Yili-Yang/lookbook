@@ -1,0 +1,16 @@
+{
+  "name": "Lookbook",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 -m http.server 8000 --directory lookbook",
+      "description": "Static file server for the lookbook app. Open http://localhost:8000/ for the app and http://localhost:8000/test.html for the in-browser test suite."
+    }
+  ],
+  "ports": [
+    {
+      "name": "web server",
+      "port": 8000
+    }
+  ]
+}
