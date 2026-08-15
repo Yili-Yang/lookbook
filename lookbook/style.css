@@ -524,7 +524,7 @@ main {
 }
 
 .slot-img-wrap {
-  width: 84px;
+  width: 108px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -532,8 +532,8 @@ main {
 }
 
 .slot-img {
-  width: 84px;
-  height: 84px;
+  width: 108px;
+  height: 108px;
   border-radius: 3px;
   object-fit: contain;
   background: var(--bg-card);
@@ -546,6 +546,34 @@ main {
   color: var(--ink-faint);
   text-align: center;
 }
+
+/* ── Framing a photo on the garment ── */
+.frame-picker {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.frame-picker.hidden { display: none; }
+
+.frame-picker button {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 2px;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.frame-picker button:last-child { border-right: none; }
+.frame-picker button:hover { background: var(--bg-soft); color: var(--ink); }
+.frame-picker button.selected { background: var(--ink); color: var(--bg); }
 
 .slot-fields {
   flex: 1;
@@ -716,6 +744,70 @@ main {
   align-items: center;
   gap: 6px;
 }
+
+/* ── Choosing who to read ── */
+.palette-block .btn-link { margin-top: 10px; }
+
+.sources-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sources-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.sources-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 14px;
+}
+
+.source-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.source-toggle input { margin: 0; accent-color: var(--ink); }
+.source-toggle-name { font-weight: 500; }
+.source-toggle-voice {
+  color: var(--ink-faint);
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-icon-sm { width: 20px; height: 20px; font-size: 11px; }
+
+.source-add { display: flex; gap: 6px; }
+.source-add input {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--ink);
+  min-width: 0;
+}
+.source-add input:focus { outline: none; border-color: var(--ink); }
+
+.sources-error { font-size: 11px; color: #c0392b; }
 
 .ideas-intro, .ideas-meta {
   font-size: 12px;

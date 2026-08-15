@@ -1,17 +1,32 @@
-// Recommendations come from two places: what independent style writers are
-// actually talking about right now, and the colours already in the lookbook.
-// The writers supply the garment and the cut; the wardrobe supplies the colour.
+// Recommendations come from two places: what independent style writers and
+// creators are talking about right now, and the colours already in the
+// lookbook. They supply the garment and the cut; the wardrobe supplies the
+// colour.
+//
+// The list is deliberately weighted towards minimal, neutral, modern dressing —
+// Scandinavian essentials and relaxed British labels rather than bespoke
+// tailoring — because that is the wardrobe this app is for. It is editable in
+// the Ideas panel, since taste is the one thing a default cannot get right.
 const STYLE_SOURCES = [
-  { name: 'He Spoke Style', url: 'https://hespokestyle.com/category/style/', voice: 'classic menswear outfits' },
-  { name: 'Who What Wear', url: 'https://www.whowhatwear.com/section/fashion', voice: 'what editors are wearing' },
-  { name: 'Die, Workwear!', url: 'https://dieworkwear.com/', voice: 'menswear criticism' },
-  { name: 'Permanent Style', url: 'https://www.permanentstyle.com/', voice: 'tailoring and cloth' },
-  { name: 'GQ Style', url: 'https://www.gq.com/style', voice: 'trend reporting' },
-  { name: 'Esquire Style', url: 'https://www.esquire.com/style/', voice: 'trend reporting' },
-  { name: 'Blackbird Spyplane', url: 'https://www.blackbirdspyplane.com/', voice: 'off-centre recommendations' },
+  { id: 'asket', name: 'Asket', kind: 'blog', url: 'https://www.asket.com/en-us/journal', voice: 'Scandinavian essentials' },
+  { id: 'norse', name: 'Norse Projects', kind: 'blog', url: 'https://www.norseprojects.com/blogs/journal', voice: 'Scandinavian minimalism' },
+  { id: 'percival', name: 'Percival', kind: 'blog', url: 'https://percivalclo.com/blogs/news', voice: 'young British menswear' },
+  { id: 'universal-works', name: 'Universal Works', kind: 'blog', url: 'https://universalworks.co.uk/blogs/journal', voice: 'relaxed British workwear' },
+  { id: 'blackbird', name: 'Blackbird Spyplane', kind: 'blog', url: 'https://www.blackbirdspyplane.com/', voice: 'off-centre recommendations' },
+  { id: 'highsnobiety', name: 'Highsnobiety', kind: 'blog', url: 'https://www.highsnobiety.com/style/', voice: 'what younger dressers wear' },
+  { id: 'end', name: 'END. Features', kind: 'blog', url: 'https://www.endclothing.com/gb/features', voice: 'new-season picks' },
+  { id: 'gq', name: 'GQ Style', kind: 'blog', url: 'https://www.gq.com/style', voice: 'trend reporting' },
+  { id: 'tim-dessaint', name: 'Tim Dessaint', kind: 'feed', voice: 'minimal modern menswear',
+    url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCfJrdVVcWZMHLC--a4ovLLQ' },
+  { id: 'parker-york-smith', name: 'Parker York Smith', kind: 'feed', voice: 'clean everyday outfits',
+    url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCDHnXzXMy11cWm95J-Lw-bQ' },
+  { id: 'one-dapper-street', name: 'One Dapper Street', kind: 'feed', voice: 'sharper casual dressing',
+    url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCoxWvJUqQWuWY6kkx1CBHZw' },
 ];
 
-const SOURCES_PER_RUN = 5;
+const SOURCES_PER_RUN = 6;
+const FEEDS_PER_RUN = 2;
+const GATHER_BUDGET_MS = 22000;
 const IDEAS_CACHE_KEY = 'lookbook-ideas-cache-v2';
 const IDEAS_CACHE_MS = 12 * 60 * 60 * 1000;
 const POSTS_PER_IDEA = 3;
@@ -74,10 +89,48 @@ const IDEA_PATTERN = new RegExp(
 );
 
 // ── Reading the sources ────────────────────────────────────────────────────
-async function readStyleSource(source) {
+function readStyleSource(source) {
+  return source.kind === 'feed' ? readFeedSource(source) : readBlogSource(source);
+}
+
+async function readBlogSource(source) {
   // Markdown rather than HTML: it strips the navigation and leaves the writing.
   const body = await fetchText(`https://r.jina.ai/${source.url}`);
   return extractGarmentIdeas(body, source);
+}
+
+// A creator's feed carries far fewer words than a blog, but each entry is a
+// whole video about an outfit, and its thumbnail is the outfit itself.
+async function readFeedSource(source) {
+  const entries = parseFeedEntries(await fetchRaw(source.url));
+  const ideas = new Map();
+
+  for (const entry of entries) {
+    const post = { title: entry.title, url: entry.url, image: entry.image, source: source.name };
+    collectIdeas(entry.title, source, ideas, () => post);
+  }
+
+  return finishIdeas(ideas);
+}
+
+function parseFeedEntries(xml) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.querySelector('parsererror')) return [];
+
+  const items = [...doc.getElementsByTagName('entry'), ...doc.getElementsByTagName('item')];
+  return items.map(item => {
+    const link = item.getElementsByTagName('link')[0];
+    return {
+      title: text(item, 'title'),
+      url: link?.getAttribute('href') || link?.textContent?.trim() || text(item, 'guid'),
+      image: item.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url')
+        || item.getElementsByTagName('enclosure')[0]?.getAttribute('url') || '',
+    };
+  }).filter(entry => entry.title && entry.url);
+}
+
+function text(element, tag) {
+  return element.getElementsByTagName(tag)[0]?.textContent?.trim() || '';
 }
 
 // Slugs such as "navy-blue-hopsack-sport-coat-with-white-linen-pants" describe
@@ -89,11 +142,14 @@ function readableText(markdown) {
 }
 
 function extractGarmentIdeas(markdown, source) {
-  const text = readableText(markdown);
   const posts = extractPosts(markdown, source);
   const ideas = new Map();
+  collectIdeas(readableText(markdown), source, ideas, index => postAround(posts, index));
+  return finishIdeas(ideas);
+}
 
-  for (const match of text.matchAll(IDEA_PATTERN)) {
+function collectIdeas(text, source, ideas, postAt) {
+  for (const match of String(text).matchAll(IDEA_PATTERN)) {
     const garment = match[3].toLowerCase();
     const category = GARMENT_CATEGORY.get(garment);
     if (!category) continue;
@@ -112,23 +168,37 @@ function extractGarmentIdeas(markdown, source) {
 
     // Remember which post this mention came from, so the suggestion can show
     // the writing and the photograph that prompted it.
-    const post = postAround(posts, match.index);
-    if (post && !idea.posts.has(post.url)) idea.posts.set(post.url, post);
+    const post = postAt(match.index);
+    if (post && post.url && !idea.posts.has(post.url)) idea.posts.set(post.url, post);
 
     ideas.set(key, idea);
   }
+}
 
-  return [...ideas.values()].map(idea => ({
-    ...idea,
-    colours: [...idea.colours],
-    posts: [...idea.posts.values()].slice(0, POSTS_PER_IDEA),
-  }));
+// A brand's journal is half catalogue and can name "trousers" eighty times,
+// which would drown out a writer who said it once. Every source gets the same
+// sized voice, however much text it has.
+const MENTIONS_PER_SOURCE = 5;
+const IDEAS_PER_SOURCE = 14;
+
+function finishIdeas(ideas) {
+  return [...ideas.values()]
+    .map(idea => ({
+      ...idea,
+      mentions: Math.min(idea.mentions, MENTIONS_PER_SOURCE),
+      colours: [...idea.colours],
+      posts: [...idea.posts.values()].slice(0, POSTS_PER_IDEA),
+    }))
+    .sort((a, b) => b.mentions - a.mentions || Number(Boolean(b.material)) - Number(Boolean(a.material)))
+    .slice(0, IDEAS_PER_SOURCE);
 }
 
 // ── Finding the posts behind a mention ─────────────────────────────────────
 const MARKDOWN_LINK = /\[\s*(?:!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\))?\s*([^\]]*?)\s*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
 const MARKDOWN_IMAGE = /!\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
-const NAV_PATH = /\/(?:category|categories|tag|tags|author|page|section|about|contact|subscribe|newsletter|privacy|terms|search|feed|login|account|cart|offers?)(?:\/|$)/i;
+// Shop navigation reads exactly like a headline — "Crew Neck Jumpers" is three
+// words on a three-word path — so category routes are excluded by name.
+const NAV_PATH = /\/(?:category|categories|tag|tags|author|page|section|about|contact|subscribe|newsletter|privacy|terms|search|feed|login|account|cart|offers?|collections?|shop|mens?|womens?|clothing|footwear|accessories|sale|new-in|brands)(?:\/|$)/i;
 const IMAGE_FILE = /\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)/i;
 const DECORATIVE_IMAGE = /icon|logo|arrow|sprite|placeholder|avatar|spacer|\.svg/i;
 const NOT_A_HEADLINE = /skip to|subscribe|sign in|sign up|newsletter|advertis|read more|shop now|</i;
@@ -233,30 +303,98 @@ function pathOf(url) {
   }
 }
 
-async function gatherStyleIdeas({ onProgress = () => {} } = {}) {
+// ── Which sources to read ──────────────────────────────────────────────────
+function allStyleSources() {
+  return [...STYLE_SOURCES, ...loadSourceSettings().custom];
+}
+
+function enabledStyleSources() {
+  const { disabled } = loadSourceSettings();
+  return allStyleSources().filter(source => !disabled.includes(source.id));
+}
+
+// A rotating subset keeps runs quick and the recommendations varied. Feeds are
+// capped because a handful of video titles is thin next to a blog index — they
+// earn their place on the picture they bring, not the words.
+function chooseSources(sources) {
+  const blogs = shuffle(sources.filter(source => source.kind !== 'feed'));
+  const feeds = shuffle(sources.filter(source => source.kind === 'feed')).slice(0, FEEDS_PER_RUN);
+  return [...blogs.slice(0, SOURCES_PER_RUN - feeds.length), ...feeds];
+}
+
+// Accepts a blog address or a YouTube channel, which is turned into the feed
+// that channel publishes.
+function makeCustomSource(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(url.protocol)) return null;
+
+  const channel = url.hostname.endsWith('youtube.com')
+    ? url.searchParams.get('channel_id') || url.pathname.match(/\/channel\/(UC[\w-]+)/)?.[1]
+    : '';
+
+  if (url.hostname.endsWith('youtube.com') && !channel) return { error: 'youtube_needs_channel' };
+
+  const name = channel
+    ? 'YouTube channel'
+    : url.hostname.replace(/^www\./, '').split('.')[0].replace(/^./, letter => letter.toUpperCase());
+
+  return {
+    id: `custom-${url.hostname}-${(channel || url.pathname).replace(/\W+/g, '-')}`.slice(0, 60),
+    name,
+    kind: channel ? 'feed' : 'blog',
+    url: channel ? `https://www.youtube.com/feeds/videos.xml?channel_id=${channel}` : url.href,
+    voice: 'your own pick',
+    custom: true,
+  };
+}
+
+async function gatherStyleIdeas({ onProgress = () => {}, sources = enabledStyleSources() } = {}) {
   const cached = readIdeasCache();
   if (cached) return cached;
 
-  // A rotating subset keeps runs quick and the recommendations varied.
-  const sources = shuffle(STYLE_SOURCES).slice(0, SOURCES_PER_RUN);
+  const chosen = chooseSources(sources);
   const collected = [];
   const read = [];
+  let finished = 0;
 
-  for (const source of sources) {
-    onProgress(`Reading ${source.name}…`);
+  // Read together rather than one after another: sequentially this took over a
+  // minute, which is far too long to wait for a list of suggestions. One slow
+  // site does not hold up the rest either — whatever has arrived by the
+  // deadline is what gets used.
+  onProgress(`Reading ${chosen.length} sources…`);
+  const reads = chosen.map(async source => {
     try {
       const ideas = await readStyleSource(source);
       if (ideas.length) {
         collected.push(...ideas);
-        read.push(source);
+        read.push({ name: source.name, url: sourceLink(source), voice: source.voice });
       }
     } catch {
       // A source that will not load is simply skipped.
+    } finally {
+      finished++;
+      onProgress(`Read ${finished} of ${chosen.length} sources…`);
     }
-  }
+  });
 
-  if (!collected.length) throw new Error('no_sources_read');
-  const result = { ideas: mergeIdeas(collected), sources: read, readAt: Date.now() };
+  await Promise.race([
+    Promise.all(reads),
+    new Promise(resolve => setTimeout(resolve, GATHER_BUDGET_MS)),
+  ]);
+
+  // Snapshot now: anything still loading would otherwise land after the fact.
+  const ideas = collected.slice();
+  const sourcesRead = read.slice();
+  if (!ideas.length) throw new Error('no_sources_read');
+  const result = { ideas: mergeIdeas(ideas), sources: sourcesRead, readAt: Date.now() };
   writeIdeasCache(result);
   return result;
 }
@@ -279,6 +417,12 @@ function mergeIdeas(ideas) {
       .slice(0, POSTS_PER_IDEA);
   }
   return [...merged.values()].sort((a, b) => b.mentions - a.mentions);
+}
+
+// A feed address is for machines; link the human to the channel instead.
+function sourceLink(source) {
+  const channel = source.kind === 'feed' && new URL(source.url).searchParams.get('channel_id');
+  return channel ? `https://www.youtube.com/channel/${channel}` : source.url;
 }
 
 function shuffle(items) {
@@ -467,6 +611,50 @@ function describePiece(idea, colour) {
   };
 }
 
+// ── Knowing which garment a photo is of ────────────────────────────────────
+// Product pages show the whole outfit as often as the piece being sold, so
+// these words are used to prefer the photograph that shows what was asked for.
+const CATEGORY_WORDS = {
+  top: ['shirt', 'shirts', 'tee', 'tees', 't-shirt', 'tshirt', 'polo', 'sweater', 'knit', 'jumper',
+    'cardigan', 'blouse', 'sweatshirt', 'henley', 'tank', 'top', 'vest'],
+  bottom: ['trouser', 'trousers', 'pant', 'pants', 'jean', 'jeans', 'short', 'shorts', 'chino',
+    'chinos', 'skirt', 'skirts'],
+  outer: ['jacket', 'coat', 'blazer', 'overshirt', 'parka'],
+  shoes: ['shoe', 'shoes', 'loafer', 'loafers', 'sneaker', 'sneakers', 'boot', 'boots', 'sandal', 'sandals'],
+};
+
+// Reads a product name or search phrase and works out what it is.
+function inferGarment(text) {
+  const haystack = String(text || '').toLowerCase();
+  let best = null;
+  for (const [garment, category] of GARMENTS) {
+    if (!new RegExp(`\\b${garment.replace(/[-]/g, '[- ]')}\\b`).test(haystack)) continue;
+    if (!best || garment.length > best.garment.length) best = { garment, category };
+  }
+  return best;
+}
+
+// Re-orders photographs of a product so the one showing the requested garment
+// comes first, rather than a full-length shot of the whole outfit.
+function preferGarmentPhotos(candidates, wanted) {
+  if (!wanted?.category) return candidates;
+
+  const own = CATEGORY_WORDS[wanted.category] || [];
+  const others = Object.entries(CATEGORY_WORDS)
+    .filter(([category]) => category !== wanted.category)
+    .flatMap(([, words]) => words);
+
+  return candidates
+    .map(candidate => {
+      const words = `${candidate.url} ${candidate.alt || ''}`.toLowerCase().split(/[^a-z0-9]+/);
+      const mentionsOwn = words.some(word => own.includes(word)) || words.some(word => word === wanted.garment);
+      const mentionsOther = words.some(word => others.includes(word));
+      const bias = (mentionsOwn ? 20 : 0) - (mentionsOther && !mentionsOwn ? 14 : 0);
+      return { ...candidate, score: (candidate.score || 0) + bias };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
 function isSearchable(idea) {
   return Boolean(idea.material);
 }
@@ -518,12 +706,17 @@ function inspirationFor(pieces) {
         // A post found next to a mention is worth less than one that names the
         // garment itself, which is a post genuinely about this idea.
         aboutIt: mentionsGarment(post, piece.garment),
+        // Someone writing about an outfit is more inspiring than a shop listing
+        // for one garment, even though both show the piece.
+        editorial: !/\/products?\//i.test(post.url),
       });
     }
   }
 
   const ranked = posts.sort((a, b) =>
-    Number(b.aboutIt) - Number(a.aboutIt) || Number(Boolean(b.image)) - Number(Boolean(a.image)));
+    Number(b.aboutIt) - Number(a.aboutIt)
+    || Number(b.editorial) - Number(a.editorial)
+    || Number(Boolean(b.image)) - Number(Boolean(a.image)));
 
   const onTopic = ranked.filter(post => post.aboutIt);
   return (onTopic.length ? onTopic : ranked).slice(0, INSPIRATION_PER_OUTFIT);
@@ -600,6 +793,9 @@ function unambiguous(query) {
   return String(query).replace(/^\s*([a-z]+)/i, (match, first) => SEARCH_SYNONYMS[first.toLowerCase()] || match);
 }
 
+// A phrase naming the cloth — "olive wool trousers" — finds a product page.
+// A vaguer one finds a department, and dropping words to widen the search only
+// makes that worse, so nothing is returned and the piece is left for the user.
 async function searchProductUrl(query, { onProgress = () => {} } = {}) {
   const candidates = await searchResults(`${unambiguous(query)} buy`, { onProgress });
   if (!candidates.length) return null;
@@ -652,6 +848,10 @@ function extractSearchResultUrls(body) {
 // is only the words searched for — /navy-tank-top — is a department.
 const PRODUCT_ID = /\/[a-z0-9-]*\d{4,}|\/[a-z]*\d+[a-z]+\d*(?:\.html?)?$|-\d{5,}/i;
 
+function singular(word) {
+  return word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word;
+}
+
 function slugWords(path) {
   const lastSegment = path.replace(/\/$/, '').split('/').pop() || '';
   return lastSegment.replace(/\.html?$/i, '').split('-').filter(Boolean).length;
@@ -661,7 +861,9 @@ function scoreProductUrl(url, words) {
   if (NOT_A_PRODUCT.test(url) || SEARCH_QUERY.test(url)) return 0;
 
   const slug = url.toLowerCase().replace(/https?:\/\//, '');
-  const matches = words.filter(word => slug.includes(word)).length;
+  // Shops name a page for one of them: "slim-denim-trouser" is exactly what
+  // "denim trousers" was asking for.
+  const matches = words.filter(word => slug.includes(word) || slug.includes(singular(word))).length;
   // Two words in common is the difference between a page about this garment
   // and a page that merely sells clothes.
   if (matches < 2) return 0;

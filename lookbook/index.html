@@ -67,6 +67,16 @@
         <section class="palette-block">
           <h3 class="section-label">Your colours</h3>
           <div id="ideas-palette" class="palette-strip"></div>
+          <button class="btn-link" id="btn-sources-toggle">Who I read</button>
+          <div id="sources-panel" class="sources-panel hidden">
+            <p class="sources-note">Ideas come from these. Untick anything whose taste is not yours, or add your own blog or YouTube channel.</p>
+            <div id="sources-list" class="sources-list"></div>
+            <div class="source-add">
+              <input type="url" id="source-url" placeholder="https://a-blog-you-like.com or a YouTube channel" autocomplete="off">
+              <button class="btn-ghost btn-sm" id="btn-source-add">Add</button>
+            </div>
+            <p class="sources-error hidden" id="sources-error"></p>
+          </div>
         </section>
         <div id="ideas-status" class="slot-status hidden"></div>
         <div id="ideas-list"></div>

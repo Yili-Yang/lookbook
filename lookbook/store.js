@@ -35,6 +35,33 @@ function savePrefs(text) {
   }
 }
 
+const SOURCES_KEY = 'lookbook-sources';
+
+// Which style sources to read, and any the user added themselves. Taste is
+// personal enough that the built-in list is only a starting point.
+function loadSourceSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SOURCES_KEY) || '{}');
+    return {
+      disabled: Array.isArray(saved.disabled) ? saved.disabled : [],
+      custom: Array.isArray(saved.custom) ? saved.custom : [],
+    };
+  } catch (e) {
+    console.error('[store] loadSourceSettings parse error:', e);
+    return { disabled: [], custom: [] };
+  }
+}
+
+function saveSourceSettings(settings) {
+  try {
+    localStorage.setItem(SOURCES_KEY, JSON.stringify(settings));
+    return true;
+  } catch (e) {
+    console.error('[store] saveSourceSettings failed:', e);
+    return false;
+  }
+}
+
 function storageUsage() {
   let bytes = 0;
   try {

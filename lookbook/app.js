@@ -116,6 +116,9 @@ function openModalWithProducts({ title = '', notes = '', pieces = [] }) {
   pieces.forEach((piece, index) => {
     const slot = slots[index];
     if (!slot) return;
+    // The idea already knows this is the trousers, so its photo can be chosen
+    // and framed accordingly.
+    if (piece.garment) slot.slotState.wanted = { garment: piece.garment, category: piece.category };
     if (piece.url) {
       slot.querySelector('.slot-url').value = piece.url;
       triggerFetch(slot);
@@ -138,7 +141,10 @@ function addPieceSlot() {
 
   const slot = document.createElement('div');
   slot.className = 'piece-slot';
-  slot.slotState = { candidates: [], selectedUrl: '', stored: null, fetchToken: 0, imageToken: 0, expanded: false };
+  slot.slotState = {
+    candidates: [], selectedUrl: '', stored: null, blob: null, frame: 'auto', wanted: null,
+    fetchToken: 0, imageToken: 0, expanded: false,
+  };
   slot.innerHTML = `
     <div class="piece-slot-header">
       <span class="piece-slot-label">Piece ${idx}</span>
@@ -159,6 +165,11 @@ function addPieceSlot() {
     <div class="slot-preview hidden">
       <div class="slot-img-wrap">
         <img class="slot-img" src="" alt="">
+        <div class="frame-picker" role="group" aria-label="What to show of the photo">
+          <button type="button" data-frame="full">Whole</button>
+          <button type="button" data-frame="top">Top</button>
+          <button type="button" data-frame="bottom">Bottom</button>
+        </div>
         <span class="slot-img-tag"></span>
       </div>
       <div class="slot-fields">
@@ -201,6 +212,9 @@ function wireSlot(slot) {
     if (action === 'remove') removePieceSlot(slot);
     if (action === 'toggle-manual') toggleManual(slot);
     if (action === 'toggle-more') toggleMoreThumbs(slot);
+
+    const frame = e.target.closest('[data-frame]')?.dataset.frame;
+    if (frame) applyFrame(slot, frame);
   });
 
   slot.querySelectorAll('.slot-fields input').forEach(input => {
@@ -302,8 +316,12 @@ async function runFetch(slot) {
     fillField(slot, 'brand', data.brand);
     fillField(slot, 'price', data.price);
 
+    // Without knowing which garment this is, a shirt photographed on a model in
+    // trousers is as likely to be chosen for the trousers as for the shirt.
+    state.wanted = state.wanted || inferGarment(`${data.name} ${urlInput.value}`);
+
     setStatus(slot, `<span class="spinner"></span> Checking ${data.images.length} photo${data.images.length === 1 ? '' : 's'}…`, 'busy');
-    const verified = await verifyImageCandidates(data.images);
+    const verified = preferGarmentPhotos(await verifyImageCandidates(data.images), state.wanted);
     if (state.fetchToken !== token) return;
 
     if (!verified.length) {
@@ -397,16 +415,42 @@ async function selectCandidate(slot, url) {
   renderThumbs(slot);
   updateSaveButton();
 
-  const stored = await captureImage(url);
+  const stored = await captureImage(url, { frame: state.frame, category: state.wanted?.category });
   if (state.imageToken !== token) return;
 
   if (stored) {
     state.stored = stored;
-    showPreview(slot, stored.dataUrl, `Saved copy · ${formatBytes(approximateBytes(stored.dataUrl))}`);
+    state.blob = stored.blob;
+    state.frame = stored.frame;
+    showStored(slot, stored, 'Saved copy');
   } else {
+    state.blob = null;
     showPreview(slot, url, 'Linked from the shop');
   }
   updateSaveButton();
+}
+
+// Re-frames from the copy already downloaded, so switching is instant.
+async function applyFrame(slot, frame) {
+  const state = slot.slotState;
+  state.frame = frame;
+  if (!state.blob) {
+    renderFramePicker(slot);
+    return;
+  }
+
+  const token = ++state.imageToken;
+  const stored = await reframeImage(state.blob, frame);
+  if (state.imageToken !== token) return;
+
+  state.stored = { ...stored, blob: state.blob };
+  showStored(slot, state.stored, 'Saved copy');
+  updateSaveButton();
+}
+
+function showStored(slot, stored, label) {
+  showPreview(slot, stored.dataUrl, `${label} · ${formatBytes(approximateBytes(stored.dataUrl))}`);
+  renderFramePicker(slot);
 }
 
 function showPreview(slot, src, tag) {
@@ -414,6 +458,16 @@ function showPreview(slot, src, tag) {
   slot.querySelector('.slot-img').src = src;
   slot.querySelector('.slot-img-tag').textContent = tag;
   preview.classList.remove('hidden');
+  renderFramePicker(slot);
+}
+
+function renderFramePicker(slot) {
+  const state = slot.slotState;
+  const picker = slot.querySelector('.frame-picker');
+  picker.classList.toggle('hidden', !state.blob);
+  picker.querySelectorAll('[data-frame]').forEach(button => {
+    button.classList.toggle('selected', button.dataset.frame === state.frame);
+  });
 }
 
 // ── Manual photo entry ─────────────────────────────────────────────────────
@@ -462,13 +516,15 @@ async function storeLocalFile(slot, file) {
   const token = ++state.imageToken;
   setStatus(slot, `<span class="spinner"></span> Adding your photo…`, 'busy');
   try {
-    const stored = await captureLocalFile(file);
+    const stored = await captureLocalFile(file, { frame: state.frame, category: state.wanted?.category });
     if (state.imageToken !== token) return;
     state.candidates = [];
     state.selectedUrl = '';
     state.stored = stored;
+    state.blob = stored.blob;
+    state.frame = stored.frame;
     renderThumbs(slot);
-    showPreview(slot, stored.dataUrl, `From your device · ${formatBytes(approximateBytes(stored.dataUrl))}`);
+    showStored(slot, stored, 'From your device');
     setStatus(slot, '');
   } catch {
     if (state.imageToken === token) setStatus(slot, 'That file is not an image the browser can read.', 'error');
@@ -600,6 +656,7 @@ let currentOutfits = [];
 function openIdeas() {
   document.getElementById('ideas-overlay').classList.remove('hidden');
   renderPaletteStrip();
+  renderSources();
   if (currentOutfits.length) return;
 
   const cached = readIdeasCache();
@@ -652,6 +709,88 @@ async function renderPaletteStrip() {
 
 function rgbCss([r, g, b]) {
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+// ── Choosing who to read ───────────────────────────────────────────────────
+function toggleSourcesPanel() {
+  const panel = document.getElementById('sources-panel');
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) renderSources();
+}
+
+function renderSources() {
+  const { disabled } = loadSourceSettings();
+  const list = document.getElementById('sources-list');
+
+  list.innerHTML = allStyleSources().map(source => `
+    <label class="source-toggle">
+      <input type="checkbox" data-source="${esc(source.id)}" ${disabled.includes(source.id) ? '' : 'checked'}>
+      <span class="source-toggle-name">${esc(source.name)}</span>
+      <span class="source-toggle-voice">${esc(source.voice)}${source.kind === 'feed' ? ' · video' : ''}</span>
+      ${source.custom ? `<button class="btn-icon btn-icon-sm" data-remove="${esc(source.id)}" aria-label="Remove ${esc(source.name)}">✕</button>` : ''}
+    </label>
+  `).join('');
+
+  list.querySelectorAll('input[data-source]').forEach(input => {
+    input.addEventListener('change', () => setSourceEnabled(input.dataset.source, input.checked));
+  });
+  list.querySelectorAll('[data-remove]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      removeCustomSource(button.dataset.remove);
+    });
+  });
+
+  const enabled = enabledStyleSources().length;
+  document.getElementById('btn-sources-toggle').textContent = `Who I read (${enabled})`;
+}
+
+// Any change to the mix makes the cached ideas stale.
+function setSourceEnabled(id, enabled) {
+  const settings = loadSourceSettings();
+  settings.disabled = enabled
+    ? settings.disabled.filter(entry => entry !== id)
+    : [...new Set([...settings.disabled, id])];
+  saveSourceSettings(settings);
+  clearIdeasCache();
+  currentOutfits = [];
+  renderSources();
+}
+
+function addCustomSource() {
+  const input = document.getElementById('source-url');
+  const error = document.getElementById('sources-error');
+  const source = makeCustomSource(input.value);
+
+  if (!source || source.error) {
+    error.textContent = source?.error === 'youtube_needs_channel'
+      ? 'For YouTube, use the channel address (the one with /channel/UC… in it) or its RSS link.'
+      : 'That does not look like a web address.';
+    error.classList.remove('hidden');
+    return;
+  }
+
+  const settings = loadSourceSettings();
+  if (!allStyleSources().some(existing => existing.id === source.id)) {
+    settings.custom = [...settings.custom, source];
+    settings.disabled = settings.disabled.filter(entry => entry !== source.id);
+    saveSourceSettings(settings);
+    clearIdeasCache();
+    currentOutfits = [];
+  }
+
+  input.value = '';
+  error.classList.add('hidden');
+  renderSources();
+}
+
+function removeCustomSource(id) {
+  const settings = loadSourceSettings();
+  settings.custom = settings.custom.filter(source => source.id !== id);
+  saveSourceSettings(settings);
+  clearIdeasCache();
+  currentOutfits = [];
+  renderSources();
 }
 
 // The palette is derived from the saved photos, and falls back to the colours
@@ -795,7 +934,7 @@ async function buildLookFromIdea(id) {
     } catch {
       // Treated the same as finding nothing.
     }
-    found.push({ label: piece.label, url });
+    found.push({ label: piece.label, url, garment: piece.garment, category: piece.category });
     progress.textContent = url ? `Found ${new URL(url).hostname.replace(/^www\./, '')}` : '';
   }
 
@@ -916,6 +1055,11 @@ function init() {
   document.getElementById('ideas-close').addEventListener('click', closeIdeas);
   document.getElementById('btn-ideas-find').addEventListener('click', () => findIdeas());
   document.getElementById('btn-ideas-refresh').addEventListener('click', () => findIdeas({ refresh: true }));
+  document.getElementById('btn-sources-toggle').addEventListener('click', toggleSourcesPanel);
+  document.getElementById('btn-source-add').addEventListener('click', addCustomSource);
+  document.getElementById('source-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addCustomSource(); }
+  });
   document.getElementById('ideas-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('ideas-overlay')) closeIdeas();
   });
