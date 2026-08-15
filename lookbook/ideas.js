@@ -623,12 +623,27 @@ const CATEGORY_WORDS = {
   shoes: ['shoe', 'shoes', 'loafer', 'loafers', 'sneaker', 'sneakers', 'boot', 'boots', 'sandal', 'sandals'],
 };
 
+// Singulars that mean something else entirely: "short sleeve" is not shorts.
+const AMBIGUOUS_SINGULAR = new Set(['shorts']);
+
+// Shops write "Cotton Stretch Chino" and "Pleated Pant" for what everyone else
+// calls chinos and pants, so both forms have to be recognised.
+function garmentForms(garment) {
+  const forms = new Set([garment]);
+  if (garment.endsWith('s')) {
+    if (!AMBIGUOUS_SINGULAR.has(garment)) forms.add(garment.slice(0, -1));
+  } else {
+    forms.add(`${garment}s`);
+  }
+  return [...forms].map(form => form.replace(/-/g, '[- ]')).join('|');
+}
+
 // Reads a product name or search phrase and works out what it is.
 function inferGarment(text) {
   const haystack = String(text || '').toLowerCase();
   let best = null;
   for (const [garment, category] of GARMENTS) {
-    if (!new RegExp(`\\b${garment.replace(/[-]/g, '[- ]')}\\b`).test(haystack)) continue;
+    if (!new RegExp(`\\b(?:${garmentForms(garment)})\\b`).test(haystack)) continue;
     if (!best || garment.length > best.garment.length) best = { garment, category };
   }
   return best;

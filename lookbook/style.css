@@ -154,6 +154,10 @@ main {
   font-weight: 300;
   font-size: 18px;
   color: var(--ink-faint);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
 }
 
 /* ── Look card ── */
