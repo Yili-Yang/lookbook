@@ -717,6 +717,70 @@ main {
   gap: 6px;
 }
 
+/* ── Choosing who to read ── */
+.palette-block .btn-link { margin-top: 10px; }
+
+.sources-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sources-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.sources-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 14px;
+}
+
+.source-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.source-toggle input { margin: 0; accent-color: var(--ink); }
+.source-toggle-name { font-weight: 500; }
+.source-toggle-voice {
+  color: var(--ink-faint);
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-icon-sm { width: 20px; height: 20px; font-size: 11px; }
+
+.source-add { display: flex; gap: 6px; }
+.source-add input {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--ink);
+  min-width: 0;
+}
+.source-add input:focus { outline: none; border-color: var(--ink); }
+
+.sources-error { font-size: 11px; color: #c0392b; }
+
 .ideas-intro, .ideas-meta {
   font-size: 12px;
   line-height: 1.6;
