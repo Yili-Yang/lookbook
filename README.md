@@ -27,6 +27,12 @@ Click **+ Add Look**, paste a product page link into a piece, and press **Get ph
 
 Whichever photo you pick is downloaded, shrunk, and stored inside your lookbook. That matters because a lot of shops refuse to display their images on another site, and product links break the moment something sells out — the saved copy keeps your look intact either way.
 
+### Photos of the piece, not the outfit
+
+A product page photographs the whole outfit as often as the thing it is selling, so two pieces of a look can easily end up as two pictures of the same person. Each piece works out which garment it is — from the idea it came from, or read from the product name — and prefers photos that mention that garment.
+
+Where the photo is somebody head to toe, it is offered framed on the half being worn: the shirt from the waist up, the trousers from the waist down, trimmed in to the person so the garment fills the card. **Whole · Top · Bottom** under the preview switches between them instantly, and a garment photographed on its own is never cropped.
+
 ### When a shop cannot be read
 
 Some retailers (Zara and Uniqlo's checkout-heavy pages among them) block automated readers outright, and the app will say so. Every piece has a manual path that always works:
@@ -44,7 +50,9 @@ Shops very often advertise their own logo as the page's preview image, so the ap
 **Ideas** suggests outfits and can build them for you. It works from two things at once:
 
 - **Your colours.** Every photo you have saved is sampled down to the wardrobe colours it is actually made of — ecru, olive, navy, camel and so on — matched perceptually rather than by raw RGB. The panel shows the tones you lean on and the ones that would go with them but are missing.
-- **What style writers are posting.** A rotating handful of independent style blogs and magazines are read, and the garments and cloths they keep coming back to are pulled out.
+- **What style writers and creators are posting.** A rotating handful of sources are read, and the garments and cloths they keep coming back to are pulled out. The list leans towards minimal, neutral, modern dressing — Scandinavian essentials and relaxed British labels rather than bespoke tailoring — alongside creators' video feeds, which bring a thumbnail of the outfit itself.
+
+**Who I read** in the panel lists every source. Untick anything whose taste is not yours, or paste in your own blog or YouTube channel; the choice is remembered.
 
 The two are combined: the writers supply the garment and the fabric, your wardrobe supplies the colour. Each suggestion explains why that colour, and shows the posts it actually came out of — the headline, the publication, and the post's own photograph — so you can see what the idea looks like and click through to read it. Posts that are genuinely about that garment are preferred over ones that merely sat next to the mention.
 
@@ -71,7 +79,7 @@ Because the data is per-browser, opening the site on another device or in a priv
 bash run-tests.sh
 ```
 
-This serves the app and runs `lookbook/test.html` in headless Chrome, covering page parsing, image ranking, and storage. You can also just open `http://localhost:8000/test.html` in any browser.
+This serves the app and drives `lookbook/test.html` in headless Chrome over the DevTools protocol, covering page parsing, image ranking and framing, colour reading, outfit building, and storage. You can also just open `http://localhost:8000/test.html` in any browser.
 
 ## Deploying online
 

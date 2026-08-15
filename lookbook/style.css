@@ -524,7 +524,7 @@ main {
 }
 
 .slot-img-wrap {
-  width: 84px;
+  width: 108px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -532,8 +532,8 @@ main {
 }
 
 .slot-img {
-  width: 84px;
-  height: 84px;
+  width: 108px;
+  height: 108px;
   border-radius: 3px;
   object-fit: contain;
   background: var(--bg-card);
