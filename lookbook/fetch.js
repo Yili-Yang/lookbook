@@ -92,6 +92,26 @@ function looksLikeErrorPage(data) {
   return ERROR_PAGE_TITLE.test(data.name || '');
 }
 
+// Feeds have to come back byte for byte, so the reader — which rewrites pages
+// into prose — is no use for them. These proxies pass the response through.
+const RAW_PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+];
+
+async function fetchRaw(url) {
+  const failures = [];
+  for (const proxy of RAW_PROXIES) {
+    try {
+      return await fetchText(proxy(url));
+    } catch (err) {
+      failures.push(err.message);
+    }
+  }
+  throw new Error(`no_proxy_available: ${failures.join(', ')}`);
+}
+
 function normalizePageUrl(value) {
   const raw = String(value ?? '').trim();
   if (!raw) return '';

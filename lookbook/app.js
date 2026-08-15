@@ -600,6 +600,7 @@ let currentOutfits = [];
 function openIdeas() {
   document.getElementById('ideas-overlay').classList.remove('hidden');
   renderPaletteStrip();
+  renderSources();
   if (currentOutfits.length) return;
 
   const cached = readIdeasCache();
@@ -652,6 +653,88 @@ async function renderPaletteStrip() {
 
 function rgbCss([r, g, b]) {
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+// ── Choosing who to read ───────────────────────────────────────────────────
+function toggleSourcesPanel() {
+  const panel = document.getElementById('sources-panel');
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) renderSources();
+}
+
+function renderSources() {
+  const { disabled } = loadSourceSettings();
+  const list = document.getElementById('sources-list');
+
+  list.innerHTML = allStyleSources().map(source => `
+    <label class="source-toggle">
+      <input type="checkbox" data-source="${esc(source.id)}" ${disabled.includes(source.id) ? '' : 'checked'}>
+      <span class="source-toggle-name">${esc(source.name)}</span>
+      <span class="source-toggle-voice">${esc(source.voice)}${source.kind === 'feed' ? ' · video' : ''}</span>
+      ${source.custom ? `<button class="btn-icon btn-icon-sm" data-remove="${esc(source.id)}" aria-label="Remove ${esc(source.name)}">✕</button>` : ''}
+    </label>
+  `).join('');
+
+  list.querySelectorAll('input[data-source]').forEach(input => {
+    input.addEventListener('change', () => setSourceEnabled(input.dataset.source, input.checked));
+  });
+  list.querySelectorAll('[data-remove]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      removeCustomSource(button.dataset.remove);
+    });
+  });
+
+  const enabled = enabledStyleSources().length;
+  document.getElementById('btn-sources-toggle').textContent = `Who I read (${enabled})`;
+}
+
+// Any change to the mix makes the cached ideas stale.
+function setSourceEnabled(id, enabled) {
+  const settings = loadSourceSettings();
+  settings.disabled = enabled
+    ? settings.disabled.filter(entry => entry !== id)
+    : [...new Set([...settings.disabled, id])];
+  saveSourceSettings(settings);
+  clearIdeasCache();
+  currentOutfits = [];
+  renderSources();
+}
+
+function addCustomSource() {
+  const input = document.getElementById('source-url');
+  const error = document.getElementById('sources-error');
+  const source = makeCustomSource(input.value);
+
+  if (!source || source.error) {
+    error.textContent = source?.error === 'youtube_needs_channel'
+      ? 'For YouTube, use the channel address (the one with /channel/UC… in it) or its RSS link.'
+      : 'That does not look like a web address.';
+    error.classList.remove('hidden');
+    return;
+  }
+
+  const settings = loadSourceSettings();
+  if (!allStyleSources().some(existing => existing.id === source.id)) {
+    settings.custom = [...settings.custom, source];
+    settings.disabled = settings.disabled.filter(entry => entry !== source.id);
+    saveSourceSettings(settings);
+    clearIdeasCache();
+    currentOutfits = [];
+  }
+
+  input.value = '';
+  error.classList.add('hidden');
+  renderSources();
+}
+
+function removeCustomSource(id) {
+  const settings = loadSourceSettings();
+  settings.custom = settings.custom.filter(source => source.id !== id);
+  saveSourceSettings(settings);
+  clearIdeasCache();
+  currentOutfits = [];
+  renderSources();
 }
 
 // The palette is derived from the saved photos, and falls back to the colours
@@ -916,6 +999,11 @@ function init() {
   document.getElementById('ideas-close').addEventListener('click', closeIdeas);
   document.getElementById('btn-ideas-find').addEventListener('click', () => findIdeas());
   document.getElementById('btn-ideas-refresh').addEventListener('click', () => findIdeas({ refresh: true }));
+  document.getElementById('btn-sources-toggle').addEventListener('click', toggleSourcesPanel);
+  document.getElementById('btn-source-add').addEventListener('click', addCustomSource);
+  document.getElementById('source-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addCustomSource(); }
+  });
   document.getElementById('ideas-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('ideas-overlay')) closeIdeas();
   });
