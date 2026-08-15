@@ -793,6 +793,9 @@ function unambiguous(query) {
   return String(query).replace(/^\s*([a-z]+)/i, (match, first) => SEARCH_SYNONYMS[first.toLowerCase()] || match);
 }
 
+// A phrase naming the cloth — "olive wool trousers" — finds a product page.
+// A vaguer one finds a department, and dropping words to widen the search only
+// makes that worse, so nothing is returned and the piece is left for the user.
 async function searchProductUrl(query, { onProgress = () => {} } = {}) {
   const candidates = await searchResults(`${unambiguous(query)} buy`, { onProgress });
   if (!candidates.length) return null;
@@ -845,6 +848,10 @@ function extractSearchResultUrls(body) {
 // is only the words searched for — /navy-tank-top — is a department.
 const PRODUCT_ID = /\/[a-z0-9-]*\d{4,}|\/[a-z]*\d+[a-z]+\d*(?:\.html?)?$|-\d{5,}/i;
 
+function singular(word) {
+  return word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word;
+}
+
 function slugWords(path) {
   const lastSegment = path.replace(/\/$/, '').split('/').pop() || '';
   return lastSegment.replace(/\.html?$/i, '').split('-').filter(Boolean).length;
@@ -854,7 +861,9 @@ function scoreProductUrl(url, words) {
   if (NOT_A_PRODUCT.test(url) || SEARCH_QUERY.test(url)) return 0;
 
   const slug = url.toLowerCase().replace(/https?:\/\//, '');
-  const matches = words.filter(word => slug.includes(word)).length;
+  // Shops name a page for one of them: "slim-denim-trouser" is exactly what
+  // "denim trousers" was asking for.
+  const matches = words.filter(word => slug.includes(word) || slug.includes(singular(word))).length;
   // Two words in common is the difference between a page about this garment
   // and a page that merely sells clothes.
   if (matches < 2) return 0;

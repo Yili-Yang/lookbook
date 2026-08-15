@@ -466,12 +466,16 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     [0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert('a short slug under a product path is still a product',
     scoreProductUrl('https://greenfieldclothiers.com/products/ecru-linen-shirt', words) > 0, true);
+  // Shops name the page for one of them; the search asked for several.
+  assert('a singular product name matches a plural search',
+    scoreProductUrl('https://shop.example.com/products/slim-denim-trouser', ['denim', 'trousers']) > 0, true);
   assert('woocommerce category pages are rejected',
     scoreProductUrl('https://military-outfitters.com/product-category/navy-linen-shirts', words), 0);
   // Otherwise "navy denim shirt" finds shirts belonging to the navy.
   assert('colour names are disambiguated for searching',
     [unambiguous('navy denim shirt'), unambiguous('ecru linen shirt')],
     ['navy blue denim shirt', 'ecru linen shirt']);
+
   assert('a product page about something else is rejected',
     scoreProductUrl('https://shop.example.com/products/wool-overcoat', words), 0);
   assert('marketplace listings lose to a brand\'s own shop',
@@ -586,6 +590,11 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
 
     assert('a photo can be re-framed without downloading it again',
       (await reframeImage(fullLength, 'bottom')).frame, 'bottom');
+
+    // Half a photo is a wide strip, mostly empty backdrop either side of the
+    // person; trimming to the subject keeps the garment large in the card.
+    assert('a framed photo is trimmed to the subject, not left letterboxed',
+      framedTop.width / framedTop.height < 1.2, true);
 
     out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
     document.title = failed === 0 ? 'ALL PASS' : failed + ' FAILED';

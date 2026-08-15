@@ -121,15 +121,23 @@ const FRAMES = {
 
 async function renderStoredImage(blob, { frame = 'full', category = '' } = {}) {
   const bitmap = await loadBitmap(blob);
-  const chosen = frame === 'auto' ? chooseFrame(bitmap, category) : (FRAMES[frame] ? frame : 'full');
+  const bounds = measureContent(bitmap);
+  const chosen = frame === 'auto' ? chooseFrame(bitmap, category, bounds) : (FRAMES[frame] ? frame : 'full');
   const window = FRAMES[chosen];
 
   const cropY = Math.round(bitmap.height * window.y);
   const cropHeight = Math.max(1, Math.round(bitmap.height * window.height));
-  const scale = Math.min(1, STORED_MAX_PX / Math.max(bitmap.width, cropHeight));
 
+  // Half a photo is a wide strip, most of it empty backdrop either side of the
+  // person. Trimming to where the subject actually is keeps the garment large
+  // in the card rather than letterboxed inside it.
+  const sides = chosen === 'full' ? { x: 0, width: 1 } : subjectSides(bounds);
+  const cropX = Math.round(bitmap.width * sides.x);
+  const cropWidth = Math.max(1, Math.round(bitmap.width * sides.width));
+
+  const scale = Math.min(1, STORED_MAX_PX / Math.max(cropWidth, cropHeight));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.width = Math.max(1, Math.round(cropWidth * scale));
   canvas.height = Math.max(1, Math.round(cropHeight * scale));
 
   const ctx = canvas.getContext('2d');
@@ -137,7 +145,7 @@ async function renderStoredImage(blob, { frame = 'full', category = '' } = {}) {
   // this they would come out on a black background.
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(bitmap, 0, cropY, bitmap.width, cropHeight, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
   bitmap.close?.();
 
   return {
@@ -148,20 +156,27 @@ async function renderStoredImage(blob, { frame = 'full', category = '' } = {}) {
   };
 }
 
+function subjectSides(bounds) {
+  if (!bounds || bounds.width >= 0.98) return { x: 0, width: 1 };
+  const padding = 0.06;
+  const x = Math.max(0, bounds.left - padding);
+  const right = Math.min(1, bounds.right + padding);
+  return { x, width: Math.max(0.3, right - x) };
+}
+
 function reframeImage(blob, frame) {
   return renderStoredImage(blob, { frame });
 }
 
 // Only a photograph of somebody wearing the whole outfit is worth cropping. A
 // garment shot on its own already shows the piece, and half of it is no use.
-function chooseFrame(bitmap, category) {
+function chooseFrame(bitmap, category, bounds) {
   if (category !== 'top' && category !== 'bottom' && category !== 'outer') return 'full';
 
   // Measured against real product photography: somebody photographed head to
   // toe fills the height of a tall frame, while a garment on its own is either
   // squarer or leaves margins above and below it. The width test only rules out
   // a garment photographed edge to edge, which a person never is.
-  const bounds = measureContent(bitmap);
   const tall = bitmap.height / bitmap.width >= 1.15;
   const fillsHeight = bounds.height >= 0.78;
   const notEdgeToEdge = bounds.width <= 0.9;
@@ -191,13 +206,13 @@ function measureContent(bitmap) {
   try {
     pixels = ctx.getImageData(0, 0, CONTENT_SAMPLE_PX, CONTENT_SAMPLE_PX).data;
   } catch {
-    return { width: 1, height: 1 };
+    return { width: 1, height: 1, left: 0, right: 1 };
   }
 
   const backdrop = edgeColour(pixels);
   // A photograph taken somewhere real has no single backdrop colour, and
   // guessing where the garment sits in it would be worse than not cropping.
-  if (!backdrop) return { width: 1, height: 1 };
+  if (!backdrop) return { width: 1, height: 1, left: 0, right: 1 };
 
   let top = CONTENT_SAMPLE_PX;
   let bottom = -1;
@@ -215,10 +230,12 @@ function measureContent(bitmap) {
     }
   }
 
-  if (bottom < 0) return { width: 0, height: 0 };
+  if (bottom < 0) return { width: 0, height: 0, left: 0, right: 1 };
   return {
     width: (right - left + 1) / CONTENT_SAMPLE_PX,
     height: (bottom - top + 1) / CONTENT_SAMPLE_PX,
+    left: left / CONTENT_SAMPLE_PX,
+    right: (right + 1) / CONTENT_SAMPLE_PX,
   };
 }
 
