@@ -417,6 +417,14 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     ['top', 'bottom', 'shoes', null]);
   assert('the most specific garment in the name wins',
     inferGarment('Oxford Shirt in Ecru').garment, 'oxford shirt');
+  // Shops write "Chino" and "Pleated Pant" for what everyone else pluralises.
+  assert('a singular product name is still recognised',
+    ['Jace Cotton Stretch Chino in Ecru', 'Classic Fit Pleated Pant in Olive', 'Slim Denim Trouser']
+      .map(name => inferGarment(name)?.category ?? null),
+    ['bottom', 'bottom', 'bottom']);
+  // "Short sleeve" is not a pair of shorts.
+  assert('a sleeve length is not mistaken for shorts',
+    inferGarment('Ecru Linen Short Sleeve Camp Collar Shirt').category, 'top');
 
   // A product page shows the whole outfit as often as the piece being sold.
   const outfitPhotos = [

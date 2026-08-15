@@ -2,6 +2,20 @@
 
 A personal lookbook: paste a link to a product page, pick the photo you want, and keep the outfit. Minimalist, neutral-toned, and entirely yours — a static site with no accounts, no server, and no build step.
 
+## Try it
+
+Once this is on `master`, GitHub Pages publishes it at **https://yili-yang.github.io/lookbook/** — nothing to install, and everything it stores stays in your own browser.
+
+A first visit is empty, so there is a **Try it with a sample look** button on it. That fetches a real t-shirt and a real pair of trousers from a shop, picks a photo for each, and frames one on the top half and the other on the bottom, which is the quickest way to see what the app does. Save it and you have colours for **Ideas** to work from; delete it whenever you like.
+
+Worth clicking, in order:
+
+1. **Try it with a sample look** → **Save Look**. Note the two photos on the card: the tee from the waist up, the trousers from the waist down.
+2. **+ Add Look** → paste any product link → **Get photos**. Pick a different photo from the row; use **Whole · Top · Bottom** under the preview to change what is shown.
+3. **Ideas** → **Find ideas**. Wait about twenty seconds while it reads. Each suggestion shows the posts behind it, with their photographs.
+4. **Ideas** → **Who I read**. Untick anything whose taste is not yours, or add your own blog or YouTube channel.
+5. **Build this look** on any suggestion. It searches for each piece and opens Add Look filled in, for you to check before saving.
+
 ## Quick start
 
 Serve the `lookbook/` folder through a local web server rather than opening the file directly, because browsers block the network requests the app needs on `file://` pages.

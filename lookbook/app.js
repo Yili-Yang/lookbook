@@ -26,7 +26,13 @@ function renderGrid() {
   const visible = getLooks();
 
   if (visible.length === 0) {
-    grid.innerHTML = `<p class="empty-state">${currentFilter === 'starred' ? 'No starred looks yet.' : 'No looks yet — add your first one.'}</p>`;
+    grid.innerHTML = currentFilter === 'starred'
+      ? `<p class="empty-state">No starred looks yet.</p>`
+      : `<div class="empty-state">
+          <p>No looks yet — add your first one.</p>
+          <button class="btn-ghost btn-sm" id="btn-sample">Try it with a sample look</button>
+        </div>`;
+    document.getElementById('btn-sample')?.addEventListener('click', openSampleLook);
     return;
   }
 
@@ -128,6 +134,22 @@ function openModalWithProducts({ title = '', notes = '', pieces = [] }) {
     openManual(slot);
   });
   updateSaveButton();
+}
+
+// A tee and a pair of trousers, both photographed on a model, so a first run
+// shows what the app does: photos found and picked, each framed on the garment
+// it belongs to, and two colours for the Ideas panel to work from.
+const SAMPLE_PIECES = [
+  { url: 'https://www.uniqlo.com/us/en/products/E465185-000/00', label: 'cotton t-shirt', garment: 't-shirt', category: 'top' },
+  { url: 'https://www.uniqlo.com/us/en/products/E462197-000/00', label: 'pleated wide pants', garment: 'pants', category: 'bottom' },
+];
+
+function openSampleLook() {
+  openModalWithProducts({
+    title: 'Sample look',
+    notes: 'A sample, to show how this works. Change anything, or delete the look once you have had a look around.',
+    pieces: SAMPLE_PIECES,
+  });
 }
 
 function slotElements() {
