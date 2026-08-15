@@ -130,7 +130,11 @@ function openModalWithProducts({ title = '', notes = '', pieces = [] }) {
       triggerFetch(slot);
       return;
     }
-    setStatus(slot, `No ${esc(piece.label)} turned up in a search — paste a link or a photo for it.`, 'error');
+    // A dead end otherwise: the search that failed is offered as one the user
+    // can look through, since finding the piece by eye takes a moment.
+    setStatus(slot, `No ${esc(piece.label)} turned up in a search —
+      <a href="${esc(webSearchUrl(piece.label))}" target="_blank" rel="noopener">look for one yourself</a>,
+      then paste the link above, or add a photo below.`, 'error');
     openManual(slot);
   });
   updateSaveButton();

@@ -791,6 +791,10 @@ const SEARCH_ENDPOINTS = [
 const NOT_A_PRODUCT = new RegExp([
   '/search', '/s/', '/s\\?', '/sch/', '/browse/', '/market/', '/category/', '/categories/',
   '/product-category/', '/product-tag/', '/collection/', '/dept/', '/departments/',
+  // eBay browse pages and Poshmark's trend pages are departments with an id in
+  // the path, which would otherwise read as a product being identified. Zara
+  // marks its lists the same way it marks products, with an l instead of a p.
+  '/b/', '/bn_', '/trend/', '/deals/', '-l\\d{3,}\\.html',
   '/collections/[^/]+/?$', '/c/', '/buy/', '/shop/?$', '/shop/(?!product)',
   '_normal|[?&](?:filter|facet|refine)', 'pinterest\\.', 'reddit\\.', 'youtube\\.', 'facebook\\.',
   'instagram\\.', 'tiktok\\.', 'wikipedia\\.', 'quora\\.', 'substack\\.', 'blogspot\\.',
@@ -799,13 +803,39 @@ const NOT_A_PRODUCT = new RegExp([
 const SEARCH_QUERY = /[?&](?:q|k|s|query|keyword|search|_nkw|srsltid)=/i;
 const LOOKS_LIKE_PRODUCT = /\/(?:products?|p|dp|itm|item|pd)\/|\/product-|-p\d{4,}|\/p\d{4,}/i;
 
-// Wardrobe colour names double as other things — navy is a branch of the armed
-// forces, olive is a fruit — and searching for the fuller name avoids a shirt
-// that is navy only in the naval sense.
-const SEARCH_SYNONYMS = { navy: 'navy blue', olive: 'olive green', sage: 'sage green', mustard: 'mustard yellow' };
+// What a wardrobe calls a colour and what a shop calls it are not the same
+// thing. Navy is also a branch of the armed forces and olive is a fruit, so
+// those get their fuller names; denim blue is a fabric, and asking for a "denim
+// blue cotton tee" describes something nobody sells.
+const SEARCH_COLOURS = {
+  'denim blue': 'blue',
+  'sky blue': 'light blue',
+  'light grey': 'light grey',
+  navy: 'navy blue',
+  olive: 'olive green',
+  sage: 'sage green',
+  mustard: 'mustard yellow',
+};
+
+// Likewise for garments: shops list t-shirts, not tees.
+const SEARCH_GARMENTS = { tee: 't-shirt', knit: 'knitted jumper' };
 
 function unambiguous(query) {
-  return String(query).replace(/^\s*([a-z]+)/i, (match, first) => SEARCH_SYNONYMS[first.toLowerCase()] || match);
+  let phrase = String(query).trim();
+
+  for (const [name, replacement] of Object.entries(SEARCH_COLOURS)) {
+    const leading = new RegExp(`^${name}\\b`, 'i');
+    if (leading.test(phrase)) {
+      phrase = phrase.replace(leading, replacement);
+      break;
+    }
+  }
+
+  for (const [term, replacement] of Object.entries(SEARCH_GARMENTS)) {
+    phrase = phrase.replace(new RegExp(`\\b${term}$`, 'i'), replacement);
+  }
+
+  return phrase;
 }
 
 // A phrase naming the cloth — "olive wool trousers" — finds a product page.
@@ -823,6 +853,12 @@ async function searchProductUrl(query, { onProgress = () => {} } = {}) {
     .sort((a, b) => b.score - a.score);
 
   return scored[0]?.url || null;
+}
+
+// Where to send someone when the automatic search comes back with nothing: the
+// same phrasing, in a search they can look through themselves.
+function webSearchUrl(query) {
+  return `https://duckduckgo.com/?q=${encodeURIComponent(unambiguous(query))}`;
 }
 
 async function searchResults(query, { onProgress = () => {} } = {}) {

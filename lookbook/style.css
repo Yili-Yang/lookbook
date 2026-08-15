@@ -606,7 +606,8 @@ main {
   align-items: center;
   gap: 6px;
 }
-.slot-status.error { color: #c0392b; font-style: normal; }
+.slot-status.error { color: #c0392b; font-style: normal; display: block; }
+.slot-status.error a { color: inherit; text-underline-offset: 2px; }
 .slot-status.busy { color: var(--ink-soft); }
 
 /* ── Photo picker ── */
