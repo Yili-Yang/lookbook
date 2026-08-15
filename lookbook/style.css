@@ -547,6 +547,34 @@ main {
   text-align: center;
 }
 
+/* ── Framing a photo on the garment ── */
+.frame-picker {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.frame-picker.hidden { display: none; }
+
+.frame-picker button {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 2px;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.frame-picker button:last-child { border-right: none; }
+.frame-picker button:hover { background: var(--bg-soft); color: var(--ink); }
+.frame-picker button.selected { background: var(--ink); color: var(--bg); }
+
 .slot-fields {
   flex: 1;
   display: flex;
