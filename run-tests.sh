@@ -3,6 +3,7 @@
 set -uo pipefail
 
 PORT="${PORT:-8123}"
+DEBUG_PORT="${DEBUG_PORT:-9444}"
 ROOT="$(cd "$(dirname "$0")" && pwd)/lookbook"
 CHROME="${CHROME:-$(command -v google-chrome || command -v chromium || command -v chromium-browser)}"
 
@@ -10,26 +11,69 @@ if [ -z "$CHROME" ]; then
   echo "No Chrome/Chromium found. Open lookbook/test.html in a browser instead." >&2
   exit 1
 fi
+if ! command -v node >/dev/null; then
+  echo "Node is needed to drive the browser. Open lookbook/test.html in a browser instead." >&2
+  exit 1
+fi
 
 python3 -m http.server "$PORT" --directory "$ROOT" >/dev/null 2>&1 &
 SERVER_PID=$!
-trap 'kill "$SERVER_PID" 2>/dev/null' EXIT
-sleep 1
+"$CHROME" --headless=new --disable-gpu --no-sandbox --user-data-dir="$(mktemp -d)" \
+  --remote-debugging-port="$DEBUG_PORT" about:blank >/dev/null 2>&1 &
+CHROME_PID=$!
+trap 'kill "$SERVER_PID" "$CHROME_PID" 2>/dev/null' EXIT
+sleep 3
 
-DOM=$(mktemp)
-# Headless Chrome sometimes lingers after dumping the DOM, so it is capped.
-timeout 60 "$CHROME" --headless=new --disable-gpu --no-sandbox \
-  --user-data-dir="$(mktemp -d)" --virtual-time-budget=15000 \
-  --dump-dom "http://localhost:$PORT/test.html" >"$DOM" 2>/dev/null
+# Driven over the DevTools protocol rather than with --virtual-time-budget: the
+# asynchronous tests decode images, which the virtual clock never completes.
+PAGE_URL="http://localhost:$PORT/test.html" DEBUG_PORT="$DEBUG_PORT" node - <<'JS'
+// Wrapped because node reads stdin as a script, where top-level await is not
+// allowed.
+void (async () => {
+const port = process.env.DEBUG_PORT;
 
-python3 - "$DOM" <<'PY'
-import re, sys
-html = open(sys.argv[1]).read()
-match = re.search(r'<pre id="out">(.*?)</pre>', html, re.S)
-if not match:
-    print("Test page produced no output — check for a JavaScript error.")
-    sys.exit(1)
-output = re.sub(r'&amp;', '&', match.group(1))
-print(output.strip())
-sys.exit(0 if re.search(r'\b0 failed\b', output) else 1)
-PY
+const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+const page = targets.find(target => target.type === 'page');
+const socket = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise(resolve => socket.addEventListener('open', resolve));
+
+let id = 0;
+const pending = new Map();
+socket.addEventListener('message', event => {
+  const message = JSON.parse(event.data);
+  if (message.id && pending.has(message.id)) {
+    pending.get(message.id)(message);
+    pending.delete(message.id);
+  }
+});
+const send = (method, params = {}) => {
+  const messageId = ++id;
+  socket.send(JSON.stringify({ id: messageId, method, params }));
+  return new Promise(resolve => pending.set(messageId, resolve));
+};
+const evaluate = async expression => {
+  const response = await send('Runtime.evaluate', { expression, returnByValue: true });
+  return response.result?.result?.value;
+};
+
+await send('Page.enable');
+await send('Runtime.enable');
+await send('Page.navigate', { url: process.env.PAGE_URL });
+
+const deadline = Date.now() + 60000;
+let title = '';
+while (Date.now() < deadline) {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  title = await evaluate('document.title');
+  if (title === 'ALL PASS' || title === 'FAILED') break;
+}
+
+const output = (await evaluate("document.getElementById('out').textContent") || '').trim();
+console.log(output || 'The test page produced no output — check for a JavaScript error.');
+if (title !== 'ALL PASS') {
+  if (title !== 'FAILED') console.log('\nTimed out before the tests finished.');
+  process.exitCode = 1;
+}
+socket.close();
+})();
+JS

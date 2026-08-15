@@ -12,9 +12,13 @@
   const out = document.getElementById('out');
   let passed = 0, failed = 0;
 
-  // Without this a thrown error just stops the run and looks like a short list.
+  // Without these a thrown error just stops the run and looks like a short list.
   window.addEventListener('error', event => {
     out.textContent += `\n✗ uncaught: ${event.message} (${event.filename}:${event.lineno})\n`;
+    document.title = 'FAILED';
+  });
+  window.addEventListener('unhandledrejection', event => {
+    out.textContent += `\n✗ uncaught in async: ${event.reason?.stack || event.reason}\n`;
     document.title = 'FAILED';
   });
 
@@ -406,6 +410,30 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     })[0].colours.includes('ecru'),
     false);
 
+  // ── Knowing which garment a photo should show ────────────────────────────
+  assert('a product name is read for what it is',
+    ['Ecru Linen Camp Collar Shirt', 'Slim Leg Wool Trousers', 'Suede Loafers', 'A nice thing']
+      .map(name => inferGarment(name)?.category ?? null),
+    ['top', 'bottom', 'shoes', null]);
+  assert('the most specific garment in the name wins',
+    inferGarment('Oxford Shirt in Ecru').garment, 'oxford shirt');
+
+  // A product page shows the whole outfit as often as the piece being sold.
+  const outfitPhotos = [
+    { url: 'https://cdn.example.com/model-full-length-outfit.jpg', alt: 'Model wearing the look', score: 60 },
+    { url: 'https://cdn.example.com/wool-trousers-front.jpg', alt: 'Wool trousers', score: 50 },
+    { url: 'https://cdn.example.com/oxford-shirt-detail.jpg', alt: 'Oxford shirt', score: 55 },
+  ];
+  assert('the photo of the garment asked for comes first',
+    preferGarmentPhotos(outfitPhotos, { garment: 'trousers', category: 'bottom' })[0].url,
+    'https://cdn.example.com/wool-trousers-front.jpg');
+  assert('asking for a shirt gets the shirt instead',
+    preferGarmentPhotos(outfitPhotos, { garment: 'oxford shirt', category: 'top' })[0].url,
+    'https://cdn.example.com/oxford-shirt-detail.jpg');
+  assert('with nothing to go on, the order is left alone',
+    preferGarmentPhotos(outfitPhotos, null)[0].url,
+    'https://cdn.example.com/model-full-length-outfit.jpg');
+
   // ── Finding a product to buy ─────────────────────────────────────────────
   const searchBody = `
     [Sponsored](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fy.js%3Fad_domain%3Dquince.com)
@@ -488,6 +516,76 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     }]);
     assert('the wardrobe palette is ordered by how much is owned',
       wardrobe.map(entry => entry.name), ['ecru', 'navy']);
+
+    // ── Framing a photo on half the body ───────────────────────────────────
+    // Built without canvas.toBlob, which never completes under the virtual
+    // clock the headless test runner uses.
+    function photo(draw, width = 600, height = 800) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      draw(ctx, width, height);
+
+      const [meta, encoded] = canvas.toDataURL('image/jpeg', 0.9).split(',');
+      const binary = atob(encoded);
+      const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+      return new Blob([bytes], { type: meta.match(/:(.*?);/)[1] });
+    }
+
+    // A standing figure: a narrow column filling the height, navy on top and
+    // olive below, so a crop can be checked by the colour that survives it.
+    const fullLength = photo((ctx, w, h) => {
+      ctx.fillStyle = 'rgb(38,48,76)';
+      ctx.fillRect(w * 0.34, h * 0.06, w * 0.32, h * 0.42);
+      ctx.fillStyle = 'rgb(107,104,66)';
+      ctx.fillRect(w * 0.34, h * 0.48, w * 0.32, h * 0.46);
+    });
+    // A garment photographed on its own fills the width instead.
+    const flatLay = photo((ctx, w, h) => {
+      ctx.fillStyle = 'rgb(38,48,76)';
+      ctx.fillRect(w * 0.08, h * 0.2, w * 0.84, h * 0.55);
+    });
+
+    const framedTop = await renderStoredImage(fullLength, { frame: 'auto', category: 'top' });
+    const framedBottom = await renderStoredImage(fullLength, { frame: 'auto', category: 'bottom' });
+    assert('a full-length photo is framed on the half being worn',
+      [framedTop.frame, framedBottom.frame], ['top', 'bottom']);
+    assert('a garment shot on its own is left whole',
+      (await renderStoredImage(flatLay, { frame: 'auto', category: 'top' })).frame, 'full');
+
+    // A garment photographed edge to edge fills a tall frame just as a person
+    // does; only its width tells them apart.
+    const edgeToEdge = photo((ctx, w, h) => {
+      ctx.fillStyle = 'rgb(38,48,76)';
+      ctx.fillRect(0, 0, w, h);
+    });
+    assert('a garment filling the whole frame is left whole',
+      (await renderStoredImage(edgeToEdge, { frame: 'auto', category: 'top' })).frame, 'full');
+
+    // A photograph taken somewhere real has no plain backdrop to measure against.
+    const busyBackground = photo((ctx, w, h) => {
+      for (let y = 0; y < h; y += 20) {
+        ctx.fillStyle = `hsl(${(y / 8) % 360}, 60%, 55%)`;
+        ctx.fillRect(0, y, w, 20);
+      }
+      ctx.fillStyle = 'rgb(38,48,76)';
+      ctx.fillRect(w * 0.34, h * 0.06, w * 0.32, h * 0.88);
+    });
+    assert('a photo with no plain backdrop is not guessed at',
+      (await renderStoredImage(busyBackground, { frame: 'auto', category: 'top' })).frame, 'full');
+    assert('shoes are never cropped in half',
+      (await renderStoredImage(fullLength, { frame: 'auto', category: 'shoes' })).frame, 'full');
+
+    // The crop has to actually keep the right half of the picture.
+    const colourOf = async stored => (await extractPaletteFromImage(stored.dataUrl))[0]?.name;
+    assert('the top frame keeps what is worn on top', await colourOf(framedTop), 'navy');
+    assert('the bottom frame keeps what is worn below', await colourOf(framedBottom), 'olive');
+
+    assert('a photo can be re-framed without downloading it again',
+      (await reframeImage(fullLength, 'bottom')).frame, 'bottom');
 
     out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
     document.title = failed === 0 ? 'ALL PASS' : failed + ' FAILED';

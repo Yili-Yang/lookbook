@@ -611,6 +611,50 @@ function describePiece(idea, colour) {
   };
 }
 
+// ── Knowing which garment a photo is of ────────────────────────────────────
+// Product pages show the whole outfit as often as the piece being sold, so
+// these words are used to prefer the photograph that shows what was asked for.
+const CATEGORY_WORDS = {
+  top: ['shirt', 'shirts', 'tee', 'tees', 't-shirt', 'tshirt', 'polo', 'sweater', 'knit', 'jumper',
+    'cardigan', 'blouse', 'sweatshirt', 'henley', 'tank', 'top', 'vest'],
+  bottom: ['trouser', 'trousers', 'pant', 'pants', 'jean', 'jeans', 'short', 'shorts', 'chino',
+    'chinos', 'skirt', 'skirts'],
+  outer: ['jacket', 'coat', 'blazer', 'overshirt', 'parka'],
+  shoes: ['shoe', 'shoes', 'loafer', 'loafers', 'sneaker', 'sneakers', 'boot', 'boots', 'sandal', 'sandals'],
+};
+
+// Reads a product name or search phrase and works out what it is.
+function inferGarment(text) {
+  const haystack = String(text || '').toLowerCase();
+  let best = null;
+  for (const [garment, category] of GARMENTS) {
+    if (!new RegExp(`\\b${garment.replace(/[-]/g, '[- ]')}\\b`).test(haystack)) continue;
+    if (!best || garment.length > best.garment.length) best = { garment, category };
+  }
+  return best;
+}
+
+// Re-orders photographs of a product so the one showing the requested garment
+// comes first, rather than a full-length shot of the whole outfit.
+function preferGarmentPhotos(candidates, wanted) {
+  if (!wanted?.category) return candidates;
+
+  const own = CATEGORY_WORDS[wanted.category] || [];
+  const others = Object.entries(CATEGORY_WORDS)
+    .filter(([category]) => category !== wanted.category)
+    .flatMap(([, words]) => words);
+
+  return candidates
+    .map(candidate => {
+      const words = `${candidate.url} ${candidate.alt || ''}`.toLowerCase().split(/[^a-z0-9]+/);
+      const mentionsOwn = words.some(word => own.includes(word)) || words.some(word => word === wanted.garment);
+      const mentionsOther = words.some(word => others.includes(word));
+      const bias = (mentionsOwn ? 20 : 0) - (mentionsOther && !mentionsOwn ? 14 : 0);
+      return { ...candidate, score: (candidate.score || 0) + bias };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
 function isSearchable(idea) {
   return Boolean(idea.material);
 }
