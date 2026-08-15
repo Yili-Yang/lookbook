@@ -68,9 +68,9 @@ async function fetchProductData(productUrl, { onProgress = () => {} } = {}) {
   throw new Error(failures.length === FETCH_STRATEGIES.length ? 'all_sources_failed' : 'no_images_found');
 }
 
-async function fetchText(url, options = {}) {
+async function fetchText(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     if (!res.ok) throw new Error(`http_${res.status}`);
@@ -94,17 +94,23 @@ function looksLikeErrorPage(data) {
 
 // Feeds have to come back byte for byte, so the reader — which rewrites pages
 // into prose — is no use for them. These proxies pass the response through.
+//
+// Order matters and is measured from a browser, not from a terminal: allorigins
+// and codetabs answer curl happily but send no CORS header, so the browser
+// blocks them, and it takes them twenty to fifty seconds to say so. Trying them
+// first meant a feed never arrived before the deadline.
 const RAW_PROXIES = [
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
 ];
+const RAW_TIMEOUT_MS = 8000;
 
 async function fetchRaw(url) {
   const failures = [];
   for (const proxy of RAW_PROXIES) {
     try {
-      return await fetchText(proxy(url));
+      return await fetchText(proxy(url), {}, RAW_TIMEOUT_MS);
     } catch (err) {
       failures.push(err.message);
     }

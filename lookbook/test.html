@@ -417,6 +417,14 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     ['top', 'bottom', 'shoes', null]);
   assert('the most specific garment in the name wins',
     inferGarment('Oxford Shirt in Ecru').garment, 'oxford shirt');
+  // Shops write "Chino" and "Pleated Pant" for what everyone else pluralises.
+  assert('a singular product name is still recognised',
+    ['Jace Cotton Stretch Chino in Ecru', 'Classic Fit Pleated Pant in Olive', 'Slim Denim Trouser']
+      .map(name => inferGarment(name)?.category ?? null),
+    ['bottom', 'bottom', 'bottom']);
+  // "Short sleeve" is not a pair of shorts.
+  assert('a sleeve length is not mistaken for shorts',
+    inferGarment('Ecru Linen Short Sleeve Camp Collar Shirt').category, 'top');
 
   // A product page shows the whole outfit as often as the piece being sold.
   const outfitPhotos = [
@@ -471,10 +479,25 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     scoreProductUrl('https://shop.example.com/products/slim-denim-trouser', ['denim', 'trousers']) > 0, true);
   assert('woocommerce category pages are rejected',
     scoreProductUrl('https://military-outfitters.com/product-category/navy-linen-shirts', words), 0);
-  // Otherwise "navy denim shirt" finds shirts belonging to the navy.
-  assert('colour names are disambiguated for searching',
-    [unambiguous('navy denim shirt'), unambiguous('ecru linen shirt')],
-    ['navy blue denim shirt', 'ecru linen shirt']);
+  // Marketplace departments carry an id in the path, which would otherwise read
+  // as a product being identified.
+  assert('marketplace department pages are rejected',
+    [scoreProductUrl('https://www.ebay.com/b/Ecru-Linen-Shirts-for-Men/15687/bn_7115944070', words),
+     scoreProductUrl('https://poshmark.com/trend/Ecru-Linen-Shirts-d6d111e71c9036e4a5ab', words),
+     // Zara marks a list with an l where a product has a p.
+     scoreProductUrl('https://www.zara.com/us/en/woman-linen-shirts-ecru-l2225.html', words)],
+    [0, 0, 0]);
+  assert('a zara product page is still accepted',
+    scoreProductUrl('https://www.zara.com/us/en/ecru-linen-shirt-p06427054.html', words) > 0, true);
+
+  assert('a search someone can look through themselves is offered',
+    webSearchUrl('denim blue cotton tee'),
+    'https://duckduckgo.com/?q=blue%20cotton%20t-shirt');
+  // Otherwise "navy denim shirt" finds shirts belonging to the navy, and
+  // "denim blue cotton tee" describes something nobody sells.
+  assert('a wardrobe colour is turned into one a shop would use',
+    ['navy denim shirt', 'denim blue cotton tee', 'ecru linen shirt', 'olive wool trousers'].map(unambiguous),
+    ['navy blue denim shirt', 'blue cotton t-shirt', 'ecru linen shirt', 'olive green wool trousers']);
 
   assert('a product page about something else is rejected',
     scoreProductUrl('https://shop.example.com/products/wool-overcoat', words), 0);
