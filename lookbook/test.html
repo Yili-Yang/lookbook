@@ -279,6 +279,45 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer, over ol
   assert('colours are read from image slugs',
     byName['hopsack sport coat'].colours, ['navy']);
   assert('colours are read from prose', byName['linen camp collar shirt'].colours, ['ecru']);
+  // ── Linking back to the post ─────────────────────────────────────────────
+  const feed = `Title: Style Archives
+
+URL Source: https://hespokestyle.com/category/style/
+
+Markdown Content:
+*   [Read All](https://hespokestyle.com/blog/)
+*   [Style](https://hespokestyle.com/category/style/)
+
+![Image 1](https://hespokestyle.com/wp-content/uploads/2026/07/navy-blue-hopsack-sport-coat-outfit.jpg)
+
+### [Why A Navy Hopsack Sport Coat Earns Its Keep](https://hespokestyle.com/2026/07/navy-hopsack-sport-coat/ "Navy hopsack")
+A navy hopsack sport coat is the most useful jacket you can own.
+
+![Image 2](https://hespokestyle.com/wp-content/themes/images/right-arrow.svg)
+
+### [The Case For A Linen Camp Collar Shirt](https://hespokestyle.com/2026/06/linen-camp-collar-shirt/)
+An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
+
+  const feedSource = { name: 'He Spoke Style', url: 'https://hespokestyle.com/category/style/' };
+  const posts = extractPosts(feed, feedSource);
+  assert('posts are found, navigation is not',
+    posts.map(post => post.title),
+    ['Why A Navy Hopsack Sport Coat Earns Its Keep', 'The Case For A Linen Camp Collar Shirt']);
+  assert('a link with a markdown title attribute is still read',
+    posts[0].url, 'https://hespokestyle.com/2026/07/navy-hopsack-sport-coat/');
+  assert('the post carries the photograph above it',
+    posts[0].image, 'https://hespokestyle.com/wp-content/uploads/2026/07/navy-blue-hopsack-sport-coat-outfit.jpg');
+  // An arrow icon is not a picture of the outfit.
+  assert('decorative images are not used as the picture', posts[1].image, '');
+
+  const linkedIdeas = extractGarmentIdeas(feed, feedSource);
+  const shirtIdea = linkedIdeas.find(idea => idea.garment === 'camp collar shirt');
+  const coatIdea = linkedIdeas.find(idea => idea.garment === 'sport coat');
+  assert('each idea points at the post it came from',
+    [coatIdea.posts[0].title, shirtIdea.posts[0].title],
+    ['Why A Navy Hopsack Sport Coat Earns Its Keep', 'The Case For A Linen Camp Collar Shirt']);
+  assert('the post keeps the name of who wrote it', shirtIdea.posts[0].source, 'He Spoke Style');
+
   assert('blog colour words map onto wardrobe colours',
     extractGarmentIdeas('an off-white oxford shirt and khaki chinos', { name: 'x', url: 'y' })
       .flatMap(idea => idea.colours).sort(),
@@ -286,9 +325,10 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer, over ol
 
   // ── Building outfits ─────────────────────────────────────────────────────
   const sampleIdeas = mergeIdeas([
-    { garment: 'camp collar shirt', category: 'top', material: 'linen', mentions: 5, colours: ['ecru'], source: 'He Spoke Style', sourceUrl: '' },
-    { garment: 'chinos', category: 'bottom', material: '', mentions: 4, colours: [], source: 'He Spoke Style', sourceUrl: '' },
-    { garment: 'loafers', category: 'shoes', material: 'suede', mentions: 3, colours: [], source: 'GQ Style', sourceUrl: '' },
+    { garment: 'camp collar shirt', category: 'top', material: 'linen', mentions: 5, colours: ['ecru'], source: 'He Spoke Style', sourceUrl: '',
+      posts: [{ title: 'The Case For A Linen Camp Collar Shirt', url: 'https://blog.example.com/linen-camp-collar-shirt', image: '', source: 'He Spoke Style' }] },
+    { garment: 'chinos', category: 'bottom', material: '', mentions: 4, colours: [], source: 'He Spoke Style', sourceUrl: '', posts: [] },
+    { garment: 'loafers', category: 'shoes', material: 'suede', mentions: 3, colours: [], source: 'GQ Style', sourceUrl: '', posts: [] },
   ]);
   const outfits = buildOutfitIdeas({
     ideas: sampleIdeas,
@@ -305,6 +345,19 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer, over ol
   assert('the two colours work together',
     colorsGoTogether(outfits[0].colours[0], outfits[0].colours[1]), true);
   assert('each piece reads as something to shop for', outfits[0].pieces[0].label, 'ecru linen camp collar shirt');
+  assert('the suggestion carries the posts behind it',
+    outfits[0].inspiration.map(post => post.url), ['https://blog.example.com/linen-camp-collar-shirt']);
+
+  // A post that merely sat next to the mention loses to one about the garment.
+  const relevantFirst = inspirationFor([{
+    garment: 'camp collar shirt',
+    posts: [
+      { title: 'Gray Glen Check Suit Vest', url: 'https://blog.example.com/suit-vest', image: 'https://img/a.jpg', source: 'x' },
+      { title: 'The Case For A Linen Camp Collar Shirt', url: 'https://blog.example.com/camp-collar', image: '', source: 'x' },
+    ],
+  }]);
+  assert('posts about the garment come first, and off-topic ones drop out',
+    relevantFirst.map(post => post.title), ['The Case For A Linen Camp Collar Shirt']);
   // Chinos are cotton whether or not the writer said so, and a search needs it.
   assert('a garment with no stated cloth still gets one', outfits[0].pieces[1].label, 'navy cotton chinos');
   // But a default must never be quoted back as something the writer claimed.
