@@ -72,6 +72,7 @@ function renderLook(look) {
         <div class="look-head">
           <span class="look-title-text" title="Click to rename" onclick="startTitleEdit('${esc(look.id)}', this)">${esc(look.title)}</span>
           <div class="look-actions">
+            <button class="share-btn" onclick="openShareSheet('${esc(look.id)}')" aria-label="Share look">Share</button>
             <button class="star-btn ${look.starred ? 'starred' : ''}" onclick="toggleStar('${esc(look.id)}')" aria-label="${look.starred ? 'Unstar' : 'Star'} look">
               ${look.starred ? '★' : '☆'}
             </button>
@@ -982,6 +983,9 @@ async function buildLookFromIdea(id) {
 // ── Preferences drawer ─────────────────────────────────────────────────────
 function openDrawer() {
   document.getElementById('prefs-text').value = loadPrefs();
+  const profile = loadShareProfile();
+  document.getElementById('share-instagram').value = profile.instagram ? `@${profile.instagram}` : '';
+  document.getElementById('share-x').value = profile.x ? `@${profile.x}` : '';
   document.getElementById('prefs-drawer').classList.remove('hidden');
   document.getElementById('drawer-backdrop').classList.remove('hidden');
   updateStorageMeter();
@@ -991,6 +995,197 @@ function openDrawer() {
 function closeDrawer() {
   document.getElementById('prefs-drawer').classList.add('hidden');
   document.getElementById('drawer-backdrop').classList.add('hidden');
+}
+
+function persistShareProfileFields() {
+  saveShareProfile({
+    instagram: document.getElementById('share-instagram').value,
+    x: document.getElementById('share-x').value,
+  });
+}
+
+// ── Share sheet ────────────────────────────────────────────────────────────
+let sharingLookId = null;
+let sharingUrl = '';
+let sharingPreviewUrl = '';
+
+function openShareSheet(id) {
+  const look = looks.find(entry => entry.id === id);
+  if (!look) return;
+  sharingLookId = id;
+  sharingUrl = '';
+  setShareStatus('');
+  document.getElementById('share-lead').textContent = look.title;
+  document.getElementById('share-preview').classList.add('hidden');
+  document.getElementById('share-preview-status').textContent = 'Preparing card…';
+  document.getElementById('share-overlay').classList.remove('hidden');
+  prepareShareSheet(look);
+}
+
+function closeShareSheet() {
+  document.getElementById('share-overlay').classList.add('hidden');
+  sharingLookId = null;
+  sharingUrl = '';
+  if (sharingPreviewUrl) {
+    URL.revokeObjectURL(sharingPreviewUrl);
+    sharingPreviewUrl = '';
+  }
+}
+
+function setShareStatus(text) {
+  document.getElementById('share-status').textContent = text || '';
+}
+
+function currentSharingLook() {
+  return looks.find(entry => entry.id === sharingLookId) || null;
+}
+
+async function prepareShareSheet(look) {
+  const profile = loadShareProfile();
+  try {
+    sharingUrl = await lookShareUrl(look);
+  } catch (e) {
+    console.error('[share] lookShareUrl failed:', e);
+    sharingUrl = '';
+  }
+
+  const xLink = document.getElementById('btn-share-x');
+  const waLink = document.getElementById('btn-share-wa');
+  const igLink = document.getElementById('btn-share-ig');
+  if (sharingUrl) {
+    xLink.href = twitterIntentUrl(look, sharingUrl, profile);
+    waLink.href = whatsappShareUrl(look, sharingUrl, profile);
+  } else {
+    xLink.removeAttribute('href');
+    waLink.removeAttribute('href');
+  }
+
+  const ig = instagramProfileUrl(profile.instagram);
+  igLink.classList.toggle('hidden', !ig);
+  if (ig) igLink.href = ig;
+
+  // Phone browsers usually expose a system share sheet; desktop falls back to
+  // copy / download / intent links in the same panel.
+  document.getElementById('btn-share-native').textContent =
+    typeof navigator.share === 'function' ? 'Share…' : 'Share…';
+
+  try {
+    const blob = await renderShareCardBlob(look, profile);
+    if (sharingPreviewUrl) URL.revokeObjectURL(sharingPreviewUrl);
+    sharingPreviewUrl = URL.createObjectURL(blob);
+    const img = document.getElementById('share-preview');
+    img.src = sharingPreviewUrl;
+    img.classList.remove('hidden');
+    document.getElementById('share-preview-status').textContent = '';
+  } catch (e) {
+    console.error('[share] preview failed:', e);
+    document.getElementById('share-preview-status').textContent =
+      'Could not draw the share card — you can still copy the link.';
+  }
+}
+
+async function shareNativeFromSheet() {
+  const look = currentSharingLook();
+  if (!look) return;
+  try {
+    const result = await nativeShareLook(look);
+    if (result === 'unsupported') {
+      setShareStatus('This browser has no system share sheet — copy the link or download the image instead.');
+    } else if (result !== 'aborted') {
+      setShareStatus('Shared.');
+    }
+  } catch (e) {
+    console.error('[share] native share failed:', e);
+    setShareStatus('Could not open the share sheet. Try copying the link or downloading the image.');
+  }
+}
+
+async function copyShareLinkFromSheet() {
+  const look = currentSharingLook();
+  if (!look) return;
+  try {
+    if (!sharingUrl) sharingUrl = await lookShareUrl(look);
+    const ok = await copyTextToClipboard(sharingUrl);
+    setShareStatus(ok
+      ? 'Link copied. Anyone with it can open this look in the lookbook.'
+      : 'Could not copy — select and copy the address bar after opening the link yourself.');
+  } catch (e) {
+    console.error('[share] copy failed:', e);
+    setShareStatus('Could not copy the link just now.');
+  }
+}
+
+async function downloadShareCardFromSheet() {
+  const look = currentSharingLook();
+  if (!look) return;
+  try {
+    await downloadShareCard(look);
+    setShareStatus('Image downloaded — post it from Instagram or anywhere else.');
+  } catch (e) {
+    console.error('[share] download failed:', e);
+    setShareStatus('Could not build the image. Try again once the photos have loaded.');
+  }
+}
+
+// ── Shared-link import ─────────────────────────────────────────────────────
+let pendingSharedLook = null;
+
+async function maybeOpenSharedLook() {
+  const encoded = readSharedLookHash();
+  if (!encoded) return;
+  const look = await decodeLookShare(encoded);
+  clearSharedLookHash();
+  if (!look) return;
+  openImportSheet(look);
+}
+
+function openImportSheet(look) {
+  pendingSharedLook = look;
+  const from = look.sharedFrom ? ` from @${look.sharedFrom}` : '';
+  document.getElementById('import-lead').textContent = `${look.title}${from}`;
+  document.getElementById('import-preview').innerHTML = (look.pieces || []).map(piece => `
+    <div class="import-piece">
+      <div class="piece-thumb">
+        <img src="${esc(pieceImage(piece))}" alt="" loading="lazy" referrerpolicy="no-referrer"
+             onerror="this.parentElement.style.background='var(--bg-soft)'">
+      </div>
+      <div class="piece-info">
+        <div class="piece-name">${esc(piece.name)}${piece.price ? `<span class="piece-price">${esc(piece.price)}</span>` : ''}</div>
+        <div class="piece-meta">${esc(piece.brand)}</div>
+        ${piece.productUrl ? `<a class="piece-link" href="${esc(piece.productUrl)}" target="_blank" rel="noopener">Shop →</a>` : ''}
+      </div>
+    </div>
+  `).join('') || `<p class="share-hint">This link did not include any pieces.</p>`;
+  document.getElementById('import-overlay').classList.remove('hidden');
+}
+
+function closeImportSheet() {
+  document.getElementById('import-overlay').classList.add('hidden');
+  pendingSharedLook = null;
+}
+
+function saveImportedLook() {
+  if (!pendingSharedLook) return;
+  const look = { ...pendingSharedLook, id: uuid(), createdAt: Date.now() };
+  const next = [look, ...looks];
+  if (!saveLooks(next)) {
+    const lighter = {
+      ...look,
+      pieces: (look.pieces || []).map(piece => ({
+        ...piece,
+        imageData: piece.imageUrl ? '' : piece.imageData,
+      })),
+    };
+    if (!saveLooks([lighter, ...looks])) {
+      alert('There is no room left in this browser\'s storage. Delete a look or two and try again.');
+      return;
+    }
+    looks = [lighter, ...looks];
+  } else {
+    looks = next;
+  }
+  closeImportSheet();
+  renderGrid();
 }
 
 // Browsers cap localStorage near 5 MB, and saved photos are what fill it, so
@@ -1094,16 +1289,36 @@ function init() {
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
   document.getElementById('prefs-text').addEventListener('input', e => savePrefs(e.target.value));
+  document.getElementById('share-instagram').addEventListener('input', persistShareProfileFields);
+  document.getElementById('share-x').addEventListener('input', persistShareProfileFields);
+
+  document.getElementById('share-close').addEventListener('click', closeShareSheet);
+  document.getElementById('share-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('share-overlay')) closeShareSheet();
+  });
+  document.getElementById('btn-share-native').addEventListener('click', shareNativeFromSheet);
+  document.getElementById('btn-share-copy').addEventListener('click', copyShareLinkFromSheet);
+  document.getElementById('btn-share-download').addEventListener('click', downloadShareCardFromSheet);
+
+  document.getElementById('import-close').addEventListener('click', closeImportSheet);
+  document.getElementById('btn-import-dismiss').addEventListener('click', closeImportSheet);
+  document.getElementById('btn-import-save').addEventListener('click', saveImportedLook);
+  document.getElementById('import-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('import-overlay')) closeImportSheet();
+  });
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
       if (!document.getElementById('ideas-overlay').classList.contains('hidden')) closeIdeas();
+      if (!document.getElementById('share-overlay').classList.contains('hidden')) closeShareSheet();
+      if (!document.getElementById('import-overlay').classList.contains('hidden')) closeImportSheet();
       if (!document.getElementById('prefs-drawer').classList.contains('hidden')) closeDrawer();
     }
   });
 
   renderGrid();
+  maybeOpenSharedLook();
 }
 
 init();

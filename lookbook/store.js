@@ -65,7 +65,9 @@ function saveSourceSettings(settings) {
 function storageUsage() {
   let bytes = 0;
   try {
-    for (const key of [LOOKS_KEY, PREFS_KEY]) {
+    const keys = [LOOKS_KEY, PREFS_KEY, SOURCES_KEY];
+    if (typeof SHARE_PROFILE_KEY === 'string') keys.push(SHARE_PROFILE_KEY);
+    for (const key of keys) {
       bytes += (localStorage.getItem(key) || '').length * 2;
     }
   } catch { /* storage unavailable */ }

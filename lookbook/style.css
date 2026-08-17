@@ -275,6 +275,23 @@ main {
 .star-btn:hover { border-color: var(--ink); color: var(--ink); }
 .star-btn.starred { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 
+.share-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.share-btn:hover { border-color: var(--ink); color: var(--ink); background: var(--bg-soft); }
+
 .delete-btn {
   background: transparent;
   border: 1px solid transparent;
@@ -1027,6 +1044,109 @@ main {
   color: var(--ink-faint);
 }
 .drawer-foot.warning { color: #c0392b; }
+
+.share-profile {
+  flex-shrink: 0;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.share-profile-note,
+.share-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  margin: 0;
+}
+.share-field {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-top: 6px;
+}
+.share-profile input {
+  font-family: var(--sans);
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.share-profile input:focus {
+  outline: none;
+  border-color: var(--ink-soft);
+}
+
+.modal-share { max-width: 440px; }
+.share-lead {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  margin: 0 0 14px;
+  color: var(--ink);
+}
+.share-preview-wrap {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.share-preview {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.share-preview-status {
+  font-size: 13px;
+  color: var(--ink-faint);
+  font-style: italic;
+  padding: 24px;
+  text-align: center;
+}
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.share-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.share-social a {
+  text-decoration: none;
+}
+.share-status {
+  min-height: 1.4em;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+}
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.import-piece {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 3px;
+}
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
