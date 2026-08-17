@@ -95,9 +95,20 @@ bash run-tests.sh
 
 This serves the app and drives `lookbook/test.html` in headless Chrome over the DevTools protocol, covering page parsing, image ranking and framing, colour reading, outfit building, and storage. You can also just open `http://localhost:8000/test.html` in any browser.
 
-## Deploying online
+## Deploying online (free)
 
-It is plain HTML, CSS, and JavaScript, so it works anywhere static files are served — GitHub Pages, Netlify, Vercel, or Cloudflare Pages. The root `index.html` redirects to `lookbook/`.
+GitHub Pages hosts this for free. The publish workflow copies `lookbook/` to a `gh-pages` branch.
+
+**One-time setup (you have to click this — Actions cannot create the Pages site for you):**
+
+1. Merge this workflow onto `master`, then open **Actions → Publish the lookbook → Run workflow**.
+2. When that run is green, open **Settings → Pages**.
+3. **Build and deployment → Source** → **Deploy from a branch**.
+4. Branch: **gh-pages** / folder **/(root)** → **Save**.
+
+After a minute, the site is at **https://yili-yang.github.io/lookbook/**. Later pushes to `master` that touch `lookbook/` republish automatically.
+
+If Settings → Pages is missing, or you prefer not to use GitHub: drag the `lookbook` folder onto [Netlify Drop](https://app.netlify.com/drop) for a free `*.netlify.app` URL with no setup.
 
 ## File structure
 
