@@ -15,6 +15,7 @@ Worth clicking, in order:
 3. **Ideas** → **Find ideas**. Wait about twenty seconds while it reads. Each suggestion shows the posts behind it, with their photographs.
 4. **Ideas** → **Who I read**. Untick anything whose taste is not yours, or add your own blog or YouTube channel.
 5. **Build this look** on any suggestion. It searches for each piece and opens Add Look filled in, for you to check before saving.
+6. **Share** on any saved look. Copy a link friends can open, download a card image for Instagram, or use the phone’s share sheet. Set your Instagram / X handle under **Preferences** so captions credit you.
 
 ## Quick start
 
@@ -74,12 +75,21 @@ The two are combined: the writers supply the garment and the fabric, your wardro
 
 A few honest limitations: the searches sometimes land on a near miss rather than the exact piece, which is why you get the final say before anything is saved. If you have no photos saved yet, the colours are taken from your style note instead — and if that note says "no black", black stays out of the suggestions. Results are cached for half a day; **Read the blogs again** forces a fresh run.
 
+## Sharing
+
+Each look has a **Share** button. Because this site has no accounts and no server, it cannot log into Instagram or X and post for you the way a native app with OAuth can. What it does instead is what most static sites do:
+
+- **Copy link** — the look is packed into the page URL (`#look=…`). Anyone who opens it sees the outfit and can save it to their own lookbook.
+- **Download image** / phone **Share…** — a 4:5 card of the look, ready for Instagram Stories or a feed post.
+- **Post on X** / **WhatsApp** — opens those apps with the caption and link filled in.
+- **Share as** in Preferences — your Instagram and X handles are stamped on captions and the card. That credits your account; it does not connect to it.
+
 ## Everything else
 
 - **Star** a look to keep it in the ★ Starred filter.
 - **Click a title** to rename it; **🗑** deletes it.
 - The **notes** box on each card saves as you type.
-- **Preferences** is a free-form note about your style — fits, colours, brands to avoid — plus a readout of how much browser storage your looks use.
+- **Preferences** is a free-form note about your style — fits, colours, brands to avoid — plus optional social handles for sharing, and a readout of how much browser storage your looks use.
 
 ## Where your data lives
 
@@ -112,6 +122,7 @@ lookbook/
 ├── image.js          — downloads, shrinks, and stores photos
 ├── palette.js        — reads the colours out of your saved photos
 ├── ideas.js          — reads style blogs and turns them into outfit ideas
+├── share.js          — share links, captions, and the postable look card
 ├── app.js            — rendering and interaction
 └── test.html         — browser test suite
 ```

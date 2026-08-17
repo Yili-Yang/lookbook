@@ -8,6 +8,7 @@
 <script src="image.js"></script>
 <script src="palette.js"></script>
 <script src="ideas.js"></script>
+<script src="share.js"></script>
 <script>
   const out = document.getElementById('out');
   let passed = 0, failed = 0;
@@ -618,6 +619,85 @@ An ecru linen camp collar shirt is the easiest thing to wear all summer.`;
     // person; trimming to the subject keeps the garment large in the card.
     assert('a framed photo is trimmed to the subject, not left letterboxed',
       framedTop.width / framedTop.height < 1.2, true);
+
+    // ── Sharing a look ─────────────────────────────────────────────────────
+    localStorage.clear();
+    saveShareProfile({ instagram: '@yili.looks', x: 'yili_x' });
+    assert('share profile strips @ and remembers both handles', loadShareProfile(), {
+      instagram: 'yili.looks',
+      x: 'yili_x',
+    });
+    assert('instagram is the handle stamped on captions when both are set',
+      primaryShareHandle(), 'yili.looks');
+
+    const sharedLook = {
+      id: 'share-1',
+      title: 'Navy weekend',
+      notes: 'Soft linen',
+      pieces: [{
+        name: 'Linen Shirt',
+        brand: 'COS',
+        price: '$79',
+        productUrl: 'https://www.cos.com/shirt',
+        imageUrl: 'https://cdn.example.com/shirt.jpg',
+        imageData: 'data:image/jpeg;base64,' + 'A'.repeat(80),
+      }, {
+        name: 'Chinos',
+        brand: 'Uniqlo',
+        price: '$40',
+        productUrl: 'https://www.uniqlo.com/chinos',
+        imageUrl: 'https://cdn.example.com/chinos.jpg',
+        imageData: '',
+      }],
+    };
+
+    assert('share caption names the look, the pieces, and the handle',
+      shareCaption(sharedLook).split('\n'),
+      ['Navy weekend', 'COS Linen Shirt · Uniqlo Chinos', '@yili.looks']);
+
+    const encoded = await encodeLookShare(sharedLook);
+    assert('a look encodes into a compact share token',
+      encoded.length > 10 && (encoded[0] === 'g' || encoded[0] === 'r'), true);
+
+    const roundTrip = await decodeLookShare(encoded);
+    assert('decoding restores the title', roundTrip.title, 'Navy weekend');
+    assert('decoding restores both pieces', roundTrip.pieces.map(p => p.name), ['Linen Shirt', 'Chinos']);
+    assert('share links keep the shop photo URL and drop the stored copy',
+      [!!roundTrip.pieces[0].imageUrl, roundTrip.pieces[0].imageData], [true, '']);
+    assert('the creator handle rides along on the link', roundTrip.sharedFrom, 'yili.looks');
+
+    const shareUrl = await lookShareUrl(sharedLook, { origin: 'https://yili-yang.github.io/lookbook/' });
+    assert('share URLs put the look in the hash', shareUrl.startsWith('https://yili-yang.github.io/lookbook/#look='), true);
+    assert('the hash reader finds the payload', readSharedLookHash('#look=abc123'), 'abc123');
+    assert('unrelated hashes are ignored', readSharedLookHash('#ideas'), '');
+
+    assert('X intent includes the look title',
+      twitterIntentUrl(sharedLook, shareUrl).includes(encodeURIComponent('Navy weekend')), true);
+    assert('WhatsApp share includes the link',
+      whatsappShareUrl(sharedLook, shareUrl).includes(encodeURIComponent(shareUrl)), true);
+    assert('Instagram profile link is built from the handle',
+      instagramProfileUrl('yili.looks'), 'https://instagram.com/yili.looks');
+
+    // Paste/upload with no shop URL still travels when the photo is small enough.
+    const pasted = {
+      title: 'Uploaded tee',
+      notes: '',
+      pieces: [{
+        name: 'Tee',
+        brand: '',
+        price: '',
+        productUrl: '',
+        imageUrl: '',
+        imageData: 'data:image/jpeg;base64,abc',
+      }],
+    };
+    const pastedBack = await decodeLookShare(await encodeLookShare(pasted));
+    assert('a pasted photo without a shop URL is kept in the link',
+      pastedBack.pieces[0].imageData, 'data:image/jpeg;base64,abc');
+
+    const card = await renderShareCardBlob(sharedLook);
+    assert('a share card renders as a JPEG image', card.type, 'image/jpeg');
+    assert('a share card is large enough to post', card.size > 1000, true);
 
     out.textContent += '\n' + passed + ' passed, ' + failed + ' failed\n';
     document.title = failed === 0 ? 'ALL PASS' : failed + ' FAILED';

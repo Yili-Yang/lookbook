@@ -96,14 +96,70 @@
       <button class="btn-icon" id="drawer-close" aria-label="Close">✕</button>
     </div>
     <textarea id="prefs-text" placeholder="Write anything — fits you like, colors, brands, what to avoid, wardrobe gaps..."></textarea>
+    <div class="share-profile">
+      <h3 class="section-label">Share as</h3>
+      <p class="share-profile-note">Added to captions and the share card. This credits your account — it does not log in or post for you.</p>
+      <label class="share-field" for="share-instagram">Instagram</label>
+      <input type="text" id="share-instagram" placeholder="@yourname" autocomplete="off" spellcheck="false">
+      <label class="share-field" for="share-x">X / Twitter</label>
+      <input type="text" id="share-x" placeholder="@yourname" autocomplete="off" spellcheck="false">
+    </div>
     <p class="drawer-foot" id="storage-meter"></p>
   </aside>
+
+  <!-- Share a look -->
+  <div id="share-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <div class="modal modal-share">
+      <div class="modal-header">
+        <h2 id="share-title">Share this look</h2>
+        <button class="btn-icon" id="share-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="share-lead" id="share-lead"></p>
+        <div class="share-preview-wrap">
+          <img id="share-preview" alt="Share card preview" class="share-preview hidden">
+          <p id="share-preview-status" class="share-preview-status">Preparing card…</p>
+        </div>
+        <div class="share-actions">
+          <button class="btn-primary" id="btn-share-native">Share…</button>
+          <button class="btn-ghost" id="btn-share-copy">Copy link</button>
+          <button class="btn-ghost" id="btn-share-download">Download image</button>
+        </div>
+        <div class="share-social">
+          <a class="btn-ghost btn-sm" id="btn-share-x" target="_blank" rel="noopener">Post on X</a>
+          <a class="btn-ghost btn-sm" id="btn-share-wa" target="_blank" rel="noopener">WhatsApp</a>
+          <a class="btn-ghost btn-sm hidden" id="btn-share-ig" target="_blank" rel="noopener">Open Instagram</a>
+        </div>
+        <p class="share-hint">Instagram has no web “post this” button — download the image (or use Share… on your phone) and post it from the app. Your handle is stamped on the card when you set it under Preferences.</p>
+        <p class="share-status" id="share-status" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Opened from a shared link -->
+  <div id="import-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="import-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="import-title">Shared look</h2>
+        <button class="btn-icon" id="import-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="share-lead" id="import-lead"></p>
+        <div id="import-preview" class="import-preview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="btn-import-dismiss">Not now</button>
+        <button class="btn-primary" id="btn-import-save">Save to my lookbook</button>
+      </div>
+    </div>
+  </div>
 
   <script src="store.js"></script>
   <script src="fetch.js"></script>
   <script src="image.js"></script>
   <script src="palette.js"></script>
   <script src="ideas.js"></script>
+  <script src="share.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
